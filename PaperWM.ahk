@@ -2102,30 +2102,39 @@ SearchFlush() {
 OverviewOpen(mi := 0) {
     mi := mi || CurMonIdx(), m := MONS[mi], sc := m.scale
     mw := m.mr - m.ml, mh := m.mb - m.mt
-    pad := Round(32 * sc), labH := Round(28 * sc), rowGap := Round(16 * sc)
+    pad := Round(20 * sc), labH := Round(24 * sc), rowGap := Round(10 * sc)
     host := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08000000 -DPIScale")
     host.BackColor := "161616"
     host.SetFont("s11 cC8C8C8", "Segoe UI")
-    n := SPACES.Length, rowH := (mh - 2 * pad - (n - 1) * rowGap) / n
-    fg := DllCall("GetForegroundWindow", "ptr"), items := [], thumbs := [], sel := 0
+    ; Leere Workspaces bekommen nur eine schmale Zeile, den Rest teilen sich die belegten
+    weights := [], total := 0
+    for sp in SPACES
+        weights.Push(sp.cols.Length ? 1 : 0.3), total += weights[weights.Length]
+    free := mh - 2 * pad - (SPACES.Length - 1) * rowGap
+    fg := DllCall("GetForegroundWindow", "ptr"), items := [], thumbs := [], sel := 0, top := pad
     for row, sp in SPACES {
-        top := Round(pad + (row - 1) * (rowH + rowGap))
+        rowH := free * weights[row] / total
         sm := SpaceMon(sp), rects := StripRects(sp, sm)
         label := "Workspace " sp.idx (rects.Length ? "" : "  (leer)")
-        host.Add("Text", Format("x{} y{} w{} h{} BackgroundTrans{}", pad, top, mw - 2 * pad, labH
+        host.Add("Text", Format("x{} y{} w{} h{} BackgroundTrans{}", pad, Round(top), mw - 2 * pad, labH
             , sp = G.active ? " cFFFFFF" : ""), label)
-        y0 := top + labH, availH := rowH - labH, availW := mw - 2 * pad
-        s := Min(availH / (sm.mb - sm.mt), rects.width ? availW / rects.width : 1)
+        y0 := Round(top + labH), availH := rowH - labH, availW := mw - 2 * pad
+        top += rowH + rowGap
         if !rects.Length {                     ; leerer Workspace: Platzhalter zum Auswählen
-            w := Round((sm.mr - sm.ml) * s), hh := Round(availH)
+            hh := Round(availH), w := Round(hh * (sm.mr - sm.ml) / (sm.mb - sm.mt))
             host.Add("Text", Format("x{} y{} w{} h{} Background242424", pad, y0, w, hh))
             items.Push({h: 0, sp: sp, row: row, x: pad, y: y0, w: w, hh: hh})
             if sp = G.active && !sel
                 sel := items.Length
             continue
         }
+        ; nur den Bereich mit Fenstern abbilden (ohne die Ränder oben und unten)
+        yMin := rects[1].y, yMax := 0
+        for r in rects
+            yMin := Min(yMin, r.y), yMax := Max(yMax, r.y + r.h)
+        s := Min(availH / (yMax - yMin), availW / rects.width)
         for r in rects {
-            x := pad + Round(r.x * s), y := y0 + Round(r.y * s), w := Round(r.w * s), hh := Round(r.h * s)
+            x := pad + Round(r.x * s), y := y0 + Round((r.y - yMin) * s), w := Round(r.w * s), hh := Round(r.h * s)
             thumb := 0
             if DllCall("dwmapi\DwmRegisterThumbnail", "ptr", host.Hwnd, "ptr", r.hwnd, "ptr*", &thumb) = 0 {
                 DllCall("dwmapi\DwmUpdateThumbnailProperties", "ptr", thumb, "ptr", ThumbProps([x, y, x + w, y + hh]))
