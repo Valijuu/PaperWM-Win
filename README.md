@@ -81,14 +81,15 @@ Right-click the green "H" in the notification area of the taskbar.
 
 ## Shortcuts: workspaces and monitors
 
-Each monitor shows one workspace. As in GNOME, workspaces come and go on their own: there is always exactly one empty workspace at the end. When you move a window into it, a new empty one is added. An empty workspace disappears as soon as no monitor shows it, and the rest move up. So you never have to delete anything. When you take a window along, it stays visible while the workspace around it changes.
+Each monitor shows one workspace. As in GNOME, workspaces come and go on their own: there is always exactly one empty workspace at the end. When you move a window into it, a new empty one is added. An empty workspace disappears as soon as no monitor shows it, and the rest move up. So you never have to delete anything. Exception: a workspace with its own name stays even when empty. When you take a window along, it stays visible while the workspace around it changes.
 
-**Workspace indicator:** as in GNOME, the top left of each monitor shows a small pill with one dot per workspace. The workspace shown there is the elongated dash, white on the active monitor. Empty workspaces are darker. Clicking it opens the overview.
+**Workspace indicator:** as in GNOME, the top left of each monitor shows a small pill with one dot per workspace. The workspace shown there is the elongated dash, white on the active monitor. Empty workspaces are darker. The name of the workspace is shown next to it. Clicking it opens the overview, right-clicking renames the workspace.
 
 | Key | Effect |
 | --- | --- |
 | Tap Windows | Overview as in GNOME: all workspaces stacked, with large live previews of the windows. All rows are the same size. If not all workspaces fit on the screen, or a workspace is wider than the screen, the overview scrolls along with the selection as in niri. Arrow keys, Tab or the mouse wheel select a window or an empty workspace, Enter or a click jumps there, Esc or another tap closes it. If you type text instead, you land in Windows search with that text. For this, tapping Windows no longer opens the Start menu; use Ctrl+Esc or the Windows icon in the taskbar instead. |
 | Windows+Page↓ / Windows+Page↑ | Next / previous workspace |
+| Windows+F2 | Rename the current workspace (in the overview: F2 for the selected one). An empty name restores "Workspace n". |
 | Windows+Ctrl+Page↓ / Windows+Ctrl+Page↑ | Take the active window to the next / previous workspace |
 | Windows+^ | Go to the most recently used workspace. Holding Windows and pressing ^ repeatedly goes further back. |
 | Windows+Shift+^ | The same, backwards |

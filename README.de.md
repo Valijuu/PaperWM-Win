@@ -81,14 +81,15 @@ Ausgeschaltet wird über einen Rechtsklick auf das grüne „H“ im Infobereich
 
 ## Tastenkürzel: Workspaces und Monitore
 
-Jeder Monitor zeigt einen Workspace. Wie bei GNOME entstehen und verschwinden Workspaces von selbst: Am Ende steht immer genau ein leerer. Schiebst du ein Fenster hinein, kommt ein neuer leerer dazu. Ein leerer Workspace verschwindet, sobald er nirgends mehr angezeigt wird, und die übrigen rücken nach. Löschen musst du also nie etwas. Beim Mitnehmen bleibt das aktive Fenster sichtbar, während der Workspace drumherum wechselt.
+Jeder Monitor zeigt einen Workspace. Wie bei GNOME entstehen und verschwinden Workspaces von selbst: Am Ende steht immer genau ein leerer. Schiebst du ein Fenster hinein, kommt ein neuer leerer dazu. Ein leerer Workspace verschwindet, sobald er nirgends mehr angezeigt wird, und die übrigen rücken nach. Löschen musst du also nie etwas. Ausnahme: Ein Workspace mit eigenem Namen bleibt auch leer bestehen. Beim Mitnehmen bleibt das aktive Fenster sichtbar, während der Workspace drumherum wechselt.
 
-**Workspace-Anzeige:** Oben links auf jedem Monitor steht wie bei GNOME eine kleine Pille mit einem Punkt pro Workspace. Der dort angezeigte Workspace ist der längliche Strich, weiß auf dem aktiven Monitor. Leere Workspaces sind dunkler. Ein Klick darauf öffnet die Übersicht.
+**Workspace-Anzeige:** Oben links auf jedem Monitor steht wie bei GNOME eine kleine Pille mit einem Punkt pro Workspace. Der dort angezeigte Workspace ist der längliche Strich, weiß auf dem aktiven Monitor. Leere Workspaces sind dunkler. Rechts daneben steht der Name des Workspaces. Ein Klick darauf öffnet die Übersicht, ein Rechtsklick benennt den Workspace um.
 
 | Taste | Wirkung |
 | --- | --- |
 | Windows tippen | Übersicht wie bei GNOME: alle Workspaces untereinander mit großen Live-Vorschauen der Fenster. Alle Zeilen sind gleich groß. Passen nicht alle Workspaces auf den Bildschirm oder ist ein Workspace breiter als der Bildschirm, scrollt die Übersicht wie bei niri mit der Auswahl mit. Pfeiltasten, Tab oder das Mausrad wählen ein Fenster oder einen leeren Workspace, Enter oder ein Klick springt hin, Esc oder erneutes Tippen schließt. Wer stattdessen Text tippt, landet mit diesem Text in der Windows-Suche. Das Startmenü öffnet sich dafür nicht mehr beim Tippen auf Windows, sondern über Strg+Esc oder das Windows-Symbol in der Taskleiste. |
 | Windows+Bild↓ / Windows+Bild↑ | Nächster / vorheriger Workspace |
+| Windows+F2 | Aktuellen Workspace umbenennen (in der Übersicht: F2 für den ausgewählten). Leerer Name = wieder „Workspace n“. |
 | Windows+Strg+Bild↓ / Windows+Strg+Bild↑ | Aktives Fenster in den nächsten / vorherigen Workspace mitnehmen |
 | Windows+^ | Zum zuletzt benutzten Workspace. Windows-Taste gedrückt halten und ^ mehrmals drücken blättert weiter. |
 | Windows+Shift+^ | Dasselbe rückwärts |

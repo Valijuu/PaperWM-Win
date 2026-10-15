@@ -91,6 +91,7 @@ global KEYMAP := [
     ["#+c", "switch-focus-mode"], ["#+w", "switch-open-window-position"],
     ["#Enter", "new-window"], ["#n", "new-window"], ["#BackSpace", "close-window"],
     ["#Escape", "toggle-scratch-window"], ["#+Escape", "toggle-scratch-layer"],
+    ["#F2", "rename-workspace"],
     ["#^Escape", "toggle-scratch"],
     ["#SC029", "previous-workspace"], ["#+SC029", "previous-workspace-backward"],
     ["#^SC029", "move-previous-workspace"], ["#+^SC029", "move-previous-workspace-backward"],
@@ -117,8 +118,11 @@ class Space {
         this.mon := 0          ; anzeigender Monitor (0 = versteckt)
         this.lastMon := 1
         this.lastScroll := 0   ; scrollX beim letzten Layout (Startpunkt der Animation)
+        this.name := ""        ; eigener Name ("" = "Workspace n")
     }
 }
+
+SpaceName(sp) => sp.name != "" ? sp.name : "Workspace " sp.idx
 
 class Column {
     __New(hwnd, width) {
@@ -140,7 +144,7 @@ global SPACE_MRU := []     ; zuletzt benutzte Workspaces (Super+^)
 global TAKEN := []         ; mit Super+T aufgenommene Fenster
 global OPEN_POSITIONS := ["right", "left", "start", "end", "down"]
 global G := {active: 0, scratch: [], q: [], openPos: "right", focusCenter: false, paused: false
-    , focusGrace: 0, hooks: [], parkX: 0, parkY: 0, osd: 0, osdText: 0
+    , focusGrace: 0, hooks: [], parkX: 0, parkY: 0, osd: 0, osdText: 0, dirty: false
     , minimized: Map()     ; hwnd → Platz im Streifen, solange das Fenster minimiert ist
     , placed: Map()        ; hwnd → zuletzt gesetzte Position (spart Abfragen)
     , borders: Map()       ; hwnd → unsichtbare Fensterränder
@@ -199,6 +203,7 @@ global ACTIONS := Map(
     "toggle-scratch-window", ToggleScratchWindow,
     "toggle-scratch-layer", ToggleScratchLayer,
     "toggle-scratch", ToggleScratch,
+    "rename-workspace", () => SetTimer(RenameSpace.Bind(CurSpace()), -1),
     "previous-workspace", () => PrevWorkspace(1),
     "previous-workspace-backward", () => PrevWorkspace(-1),
     "move-previous-workspace", () => PrevWorkspace(1, true),
@@ -236,7 +241,7 @@ for km in KEYMAP
 for k in ["LWin", "RWin"]                 ; Tippen auf Windows: Übersicht
     Hotkey("~" k, OverviewPress), Hotkey("~" k " Up", OverviewRelease)
 HotIf(OverviewIsOpen)                     ; Tasten, solange die Übersicht offen ist
-for k in ["Left", "Right", "Up", "Down", "Tab", "+Tab", "Enter", "NumpadEnter", "Escape", "WheelUp", "WheelDown"]
+for k in ["Left", "Right", "Up", "Down", "Tab", "+Tab", "Enter", "NumpadEnter", "Escape", "WheelUp", "WheelDown", "F2"]
     Hotkey(k, OverviewHotkey)
 HotIf()
 
@@ -250,6 +255,7 @@ OnMessage(0x5555, (*) => SetTimer(DumpState, -1))          ; Debug: Zustand in P
 OnMessage(0x5556, DebugOverview)                            ; Debug: Übersicht ohne Halten öffnen/Taste senden
 OnMessage(0x21, PeekMouseActivate)                          ; WM_MOUSEACTIVATE: Vorschau nicht aktivieren
 OnMessage(0x201, PeekClick)                                 ; WM_LBUTTONDOWN auf einer Vorschau
+OnMessage(0x204, IndicatorRightClick)                       ; WM_RBUTTONDOWN: Workspace umbenennen
 SetTimer(Sanity, 2000)
 SetTimer(PeriodicSave, 60000)                               ; zusätzlich regelmäßig speichern (Titel aktuell halten)
 OnExit(Cleanup)
@@ -353,7 +359,7 @@ Init() {
                 for h in found
                     WINS[h] := sp
             }
-            sp.scrollX := ws.scrollX
+            sp.scrollX := ws.scrollX, sp.name := ws.name
             sp.focusCol := Clamp(ws.focusCol, sp.cols.Length ? 1 : 0, sp.cols.Length)
         }
         for r in st.scratch
@@ -439,10 +445,16 @@ MatchRecords(recs, cands, used) {
 }
 
 ;========================= Aufteilung speichern/laden ========================
-MarkDirty() => SetTimer(SaveLayout, -1500)
+; Spätestens 1,5 s nach der ersten Änderung speichern. Ein anstehendes Speichern wird nicht
+; verschoben, sonst käme es bei ständigen Fensterereignissen (z. B. Titel) nie dazu.
+MarkDirty() {
+    if !G.dirty
+        G.dirty := true, SetTimer(SaveLayout, -1500)
+}
 
 SaveLayout() {
     Critical "On"
+    G.dirty := false
     if !SPACES.Length
         return
     s := "V`t2`n"
@@ -455,7 +467,7 @@ SaveLayout() {
         mru .= "`t" sp.idx
     s .= mru "`n"
     for sp in SPACES {
-        s .= Format("W`t{}`t{}`t{}`n", sp.idx, Round(sp.scrollX), sp.focusCol)
+        s .= Format("W`t{}`t{}`t{}`t{}`n", sp.idx, Round(sp.scrollX), sp.focusCol, sp.name)
         for col in sp.cols {
             s .= Format("C`t{}`t{}`t{}`t{}`t{}`n", Round(col.width, 5), col.full ? 1 : 0, col.focusRow, Round(col.prevWidth, 5), col.ord)
             for ri, h in col.wins
@@ -500,7 +512,7 @@ LoadLayout() {
                     loop f.Length - 1
                         st.mru.Push(Num(f[A_Index + 1]))
                 case "W":
-                    ws := {scrollX: Num(Fld(f, 3)), focusCol: Num(Fld(f, 4)), cols: []}
+                    ws := {scrollX: Num(Fld(f, 3)), focusCol: Num(Fld(f, 4)), cols: [], name: Fld(f, 5)}
                     st.spaces[Num(f[2])] := ws, col := 0
                 case "C":
                     if ws {
@@ -619,7 +631,7 @@ TidySpaces() {
         held[z.sp] := true
     keep := [], spare := 0
     for sp in SPACES
-        if sp.cols.Length || sp.mon || held.Has(sp)
+        if sp.cols.Length || sp.mon || held.Has(sp) || sp.name != ""   ; benannte bleiben
             keep.Push(sp)
         else if !spare
             spare := sp
@@ -659,7 +671,7 @@ UpdateIndicator() {
         key := ""
         for sp in SPACES
             key .= sp = m.space ? "A" : sp.cols.Length ? "x" : "o"
-        key .= (m.space = G.active ? "*" : "") "@" m.l "," m.t "," m.scale
+        key .= (m.space = G.active ? "*" : "") "@" m.l "," m.t "," m.scale ":" SpaceName(m.space)
         entry := IND.Get(i, 0)
         if entry && entry.key = key
             continue
@@ -682,7 +694,7 @@ DrawIndicator(m, key) {
     GdipInit()
     s := m.scale, hh := Round(16 * s), d := Round(8 * s), pill := Round(22 * s), gap := Round(5 * s)
     pad := (hh - d) // 2, fpx := 11 * s, active := m.space = G.active
-    label := "Workspace " m.space.idx
+    label := SpaceName(m.space)
     tw := GdipText(0, label, fpx)                            ; nur messen
     w := pad + Round(8 * s) + tw + hh // 2
     for sp in SPACES
@@ -782,6 +794,27 @@ GdipText(gr, text, px, argb := 0, x := 0, y := 0, w := 0, h := 0) {
     DllCall("gdiplus\GdipDeleteFont", "ptr", font)
     DllCall("gdiplus\GdipDeleteFontFamily", "ptr", fam)
     return width
+}
+
+; Rechtsklick auf die Workspace-Anzeige: angezeigten Workspace umbenennen
+IndicatorRightClick(wParam, lParam, msg, hwnd) {
+    if mi := IndicatorMon(hwnd) {
+        SetTimer(RenameSpace.Bind(MONS[mi].space), -1)
+        return 0
+    }
+}
+
+; Fragt einen Namen für Workspace sp ab (leer = Standardname "Workspace n")
+RenameSpace(sp) {
+    if G.paused || !IndexOf(SPACES, sp)
+        return
+    ib := InputBox("Name für " SpaceName(sp) " (leer = Standardname):", "Workspace umbenennen", "w360 h130", sp.name)
+    if ib.Result != "OK" || !IndexOf(SPACES, sp)
+        return
+    sp.name := Trim(RegExReplace(ib.Value, "[\t\r\n]+", " "))
+    Critical "On"
+    AfterChange()
+    Osd(SpaceName(sp), sp.mon)
 }
 
 IndicatorClear() {
@@ -2140,7 +2173,7 @@ OverviewOpen(mi := 0) {
         rw := {top: Round(top), bottom: Round(top + rowH), xoff: 0, maxOff: 0}
         rows.Push(rw)
         sm := SpaceMon(sp), rects := StripRects(sp, sm)
-        label := "Workspace " sp.idx (rects.Length ? "" : "  (leer)")
+        label := SpaceName(sp) (rects.Length ? "" : "  (leer)")
         c := host.Add("Text", Format("x{} y{} w{} h{} BackgroundTrans{}", pad, Round(top), availW, labH
             , sp = G.active ? " cFFFFFF" : ""), label)
         ctrls.Push({c: c, x: pad, y: Round(top), w: availW, h: labH})
@@ -2272,6 +2305,10 @@ OverviewKey(hk) {
         case "+Tab": OverviewSelect(Mod(OV.sel - 2 + OV.items.Length, OV.items.Length) + 1)
         case "Enter", "NumpadEnter": OverviewApply(OV.sel)
         case "Escape": OverviewClose()
+        case "F2":                             ; Workspace der Auswahl umbenennen
+            sp := OV.items[OV.sel].sp
+            OverviewClose()
+            SetTimer(RenameSpace.Bind(sp), -1)
     }
 }
 
@@ -2332,7 +2369,7 @@ OverviewApply(i) {
             cur := MONS[mi].space
             ShowSpace(it.sp, mi, cur && cur != it.sp ? WsDir(cur, it.sp) : 0)
             FocusSpace(it.sp)
-            Osd("Workspace " it.sp.idx, mi)
+            Osd(SpaceName(it.sp), mi)
         }
     } catch Error as e
         Log("Übersicht: " e.Message " (Zeile " e.Line ")")
@@ -2774,7 +2811,7 @@ SwitchWorkspace(d) {
         return
     ShowSpace(SPACES[i], sp.mon, d)
     FocusSpace(SPACES[i])
-    Osd("Workspace " i)
+    Osd(SpaceName(SPACES[i]))
 }
 
 MoveWorkspace(d) {
@@ -2782,7 +2819,7 @@ MoveWorkspace(d) {
     if i < 1 || i > SPACES.Length || !(h := FocusedHwnd(sp))
         return
     MoveWinToSpace(h, SPACES[i], sp.mon)
-    Osd("Workspace " i)
+    Osd(SpaceName(SPACES[i]))
 }
 
 ; Nimmt Fenster h in Workspace t mit (t wird auf monIdx angezeigt)
@@ -2826,7 +2863,7 @@ PrevWorkspace(dir, take := false) {
         ShowSpace(t, NAV.mon, cur ? WsDir(cur, t) : 0)
         FocusSpace(t)
     }
-    Osd("Workspace " t.idx)
+    Osd(SpaceName(t))
 }
 
 ;------------------------------- Monitore ------------------------------------
@@ -2838,7 +2875,7 @@ SwitchMonitor(dir) {
     FocusSpace(t)
     WarpTo(ni)
     if !t.cols.Length
-        Osd("Workspace " t.idx, ni)
+        Osd(SpaceName(t), ni)
 }
 
 MoveMonitor(dir) {
