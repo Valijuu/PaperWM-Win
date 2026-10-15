@@ -81,11 +81,13 @@ Right-click the green "H" in the notification area of the taskbar.
 
 ## Shortcuts: workspaces and monitors
 
-There are four workspaces, and each monitor shows one of them. When you take a window along, it stays visible while the workspace around it changes.
+Each monitor shows one workspace. As in GNOME, workspaces come and go on their own: there is always exactly one empty workspace at the end. When you move a window into it, a new empty one is added. An empty workspace disappears as soon as no monitor shows it, and the rest move up. So you never have to delete anything. When you take a window along, it stays visible while the workspace around it changes.
+
+**Workspace indicator:** as in GNOME, the top left of each monitor shows a small pill with one dot per workspace. The workspace shown there is the elongated dash, white on the active monitor. Empty workspaces are darker. Clicking it opens the overview.
 
 | Key | Effect |
 | --- | --- |
-| Hold Windows | Overview: all workspaces stacked, with live previews of the windows. While still holding Windows, the arrow keys select a window; releasing jumps to it. A click selects immediately, Windows+Esc cancels. A short tap still opens the Start menu. |
+| Double-tap Windows | Overview: all workspaces stacked, with live previews of the windows. Arrow keys or Tab select a window or an empty workspace, Enter or a click jumps there, Esc or another double-tap closes it. The first tap briefly opens the Start menu, the second closes it again. |
 | Windows+Page↓ / Windows+Page↑ | Next / previous workspace |
 | Windows+Ctrl+Page↓ / Windows+Ctrl+Page↑ | Take the active window to the next / previous workspace |
 | Windows+^ | Go to the most recently used workspace. Holding Windows and pressing ^ repeatedly goes further back. |
@@ -127,9 +129,9 @@ All settings are at the top of `PaperWM.ahk`. After a change, choose "Neu laden"
 | `WINDOW_GAP`, `H_MARGIN`, `V_MARGIN`, `V_MARGIN_BOTTOM` | Gap between windows and to the screen edge (default 20 px). All px values are for 100 % scaling and are converted per monitor. |
 | `RESIZE_STEP`, `DRIFT_STEP`, `MIN_COL_WIDTH` | Step size for Windows++/- and Windows+Ö/Ä, narrowest column |
 | `WIDTH_STEPS`, `HEIGHT_STEPS` | Steps for Windows+R and Windows+Shift+R |
-| `NUM_WORKSPACES` | Number of workspaces (at least as many as monitors) |
 | `ANIM_MS` | Animation duration in ms, `0` = off (default 180) |
-| `OVERVIEW_DELAY` | How long Windows must be held on its own before the overview appears, in ms, `0` = off (default 400) |
+| `OVERVIEW_DOUBLE_TAP` | Maximum time between two taps on Windows for the overview, in ms, `0` = off (default 400) |
+| `SHOW_INDICATOR` | Workspace indicator at the top left on / off |
 | `HIGHLIGHT`, `HIGHLIGHT_COLOR`, `HIGHLIGHT_WIDTH` | Frame around the active window: on/off, color (empty = Windows accent color, otherwise e.g. `"4A90E2"`), thickness |
 | `HIGHLIGHT_DWM` | Also color the Windows 11 border of the active window |
 | `FLOAT_EXES`, `FLOAT_CLASSES` | Programs or window classes that float instead of being tiled |
@@ -139,7 +141,7 @@ All settings are at the top of `PaperWM.ahk`. After a change, choose "Neu laden"
 ## How it works and where the limits are
 
 - **Overridden Windows shortcuts:** while PaperWM runs, it takes over Windows+R (Run), Windows+N, Windows+I, Windows+C, Windows+T, Windows+. (emoji), Windows+Tab and Alt+Tab. Windows+V (clipboard) stays free. To use them temporarily, pause PaperWM from the tray menu.
-- **Held keys:** Windows+T, repeated Windows+^ or Windows+Tab, and the overview only work while the Windows key stays pressed.
+- **Held keys:** Windows+T and repeated Windows+^ or Windows+Tab only work while the Windows key stays pressed.
 - **Hidden windows:** windows outside the visible area and on hidden workspaces are switched invisible ("cloaking", the same mechanism Windows uses for its virtual desktops). They stay on their monitor, keep their size, and remain in the taskbar and Alt+Tab. If this mechanism is unavailable, they are parked to the right outside all monitors instead.
 - **Windows at the edge to a neighboring monitor:** on Windows, all monitors share one coordinate space, so a window that crosses the edge would show up on the neighboring monitor. That's why the real window is invisible there, and PaperWM shows a full-size live preview in its place, cut off exactly at the monitor boundary. Nothing is squeezed, nothing spills over. Clicking the preview brings the window into view. At an outer edge with no neighboring monitor, the real window simply extends off-screen. The detection follows the actual monitor arrangement and works with any number of monitors of any size.
   - Chrome, Edge, VS Code, Teams and other Chromium/Electron apps don't draw while they are invisible. Their edge preview therefore shows the last frame until they are scrolled into view.

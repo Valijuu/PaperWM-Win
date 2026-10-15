@@ -31,10 +31,10 @@ global HEIGHT_STEPS    := [0.38195, 0.5, 0.61804]   ; Super+Shift+R
 global RESIZE_STEP     := 100     ; px pro Super+Plus/Minus
 global DRIFT_STEP      := 150     ; px pro Super+Ö/Ä
 global MIN_COL_WIDTH   := 200     ; schmalste Spalte in px
-global NUM_WORKSPACES  := 4       ; mindestens so viele wie Monitore
 global ANIM_MS         := 180     ; Dauer der Scroll-Animation in ms (0 = aus)
 global WARP_MOUSE      := true    ; Maus beim Monitorwechsel mitnehmen
-global OVERVIEW_DELAY  := 400     ; ms Windows-Taste allein halten bis zur Übersicht (0 = aus)
+global OVERVIEW_DOUBLE_TAP := 400 ; ms zwischen zwei Tipps auf Windows für die Übersicht (0 = aus)
+global SHOW_INDICATOR  := true    ; Workspace-Anzeige oben links auf jedem Monitor
 global SHOW_OSD        := true    ; Workspace-Anzeige einblenden
 
 ; Hervorhebung des aktiven Fensters
@@ -154,7 +154,8 @@ global G := {active: 0, scratch: [], q: [], openPos: "right", focusCenter: false
     , self: DllCall("GetCurrentProcessId")}
 global NAV := {active: false, kind: "", list: [], idx: 1, mon: 0, hwnd: 0}
 global HL := {gui: 0, key: "", region: "", dwm: 0, cref: 0}
-global OV := {active: false, armed: false, clean: false, ih: 0, gui: 0, thumbs: [], items: [], sel: 0, mon: 1, frame: []}
+global OV := {active: false, opened: 0, down: 0, clean: false, ih: 0, lastTap: 0, gui: 0, thumbs: [], items: [], sel: 0, mon: 1, frame: []}
+global IND := Map()        ; Monitor → Workspace-Anzeige {gui, key}
 
 global ACTIONS := Map(
     "switch-next", () => SwitchLinear(1),
@@ -231,9 +232,12 @@ CloakInit()
 Init()
 for km in KEYMAP
     Hotkey(km[1], MakeHandler(ACTIONS[km[2]]))
-InstallKeybdHook()                     ; für A_PriorKey (Windows-Taste allein gehalten?)
-for k in ["LWin", "RWin"]
+for k in ["LWin", "RWin"]                 ; Doppeltippen auf Windows: Übersicht
     Hotkey("~" k, OverviewPress), Hotkey("~" k " Up", OverviewRelease)
+HotIf(OverviewIsOpen)                     ; Tasten, solange die Übersicht offen ist
+for k in ["Left", "Right", "Up", "Down", "Tab", "+Tab", "Enter", "NumpadEnter", "Escape"]
+    Hotkey(k, OverviewHotkey)
+HotIf()
 
 cb := CallbackCreate(WinEventProc, "F", 7)
 for r in [[0x0003, 0x0003], [0x000A, 0x000B], [0x0016, 0x0017], [0x8001, 0x8003], [0x800C, 0x800C], [0x8017, 0x8018]]
@@ -257,6 +261,8 @@ A_TrayMenu.Add()
 A_TrayMenu.Add("Neu laden", (*) => Reload())
 A_TrayMenu.Add("Beenden", (*) => ExitApp())
 
+TidySpaces()
+UpdateIndicator()
 UpdateHighlight()
 SaveLayout()
 Osd("PaperWM aktiv – " WINS.Count " Fenster")
@@ -266,7 +272,7 @@ Log(Format("Start: {:.1f} s nach Systemstart, Einrichtung {} ms, {} Fenster, Clo
 Init() {
     old := LoadMonitors()
     st := LoadLayout()
-    n := Max(NUM_WORKSPACES, MONS.Length, st ? st.n : 0)
+    n := Max(MONS.Length, st ? st.n : 0)     ; leere entfernt TidySpaces danach wieder
     loop n
         SPACES.Push(Space(A_Index))
 
@@ -602,6 +608,118 @@ FreeSpace() {
     return 0
 }
 
+; Wie bei GNOME: Leere Workspaces verschwinden, sobald sie nirgends angezeigt werden, und
+; am Ende steht immer genau ein leerer. Workspaces mit minimierten Fenstern bleiben.
+TidySpaces() {
+    if NAV.active || OV.active || G.paused || !MONS.Length
+        return
+    held := Map()
+    for h, z in G.minimized
+        held[z.sp] := true
+    keep := [], spare := 0
+    for sp in SPACES
+        if sp.cols.Length || sp.mon || held.Has(sp)
+            keep.Push(sp)
+        else if !spare
+            spare := sp
+    last := keep.Length ? keep[keep.Length] : 0
+    if !last || last.cols.Length || held.Has(last)
+        keep.Push(spare || Space(0))
+    if keep.Length = SPACES.Length {
+        same := true
+        for i, sp in keep
+            if SPACES[i] != sp
+                same := false
+        if same
+            return
+    }
+    for sp in SPACES
+        if !IndexOf(keep, sp)
+            StopAnim(sp), RemoveVal(SPACE_MRU, sp)
+    SPACES.Length := 0
+    for i, sp in keep {
+        sp.idx := i
+        SPACES.Push(sp)
+        if !IndexOf(SPACE_MRU, sp)
+            SPACE_MRU.Push(sp)
+    }
+    MarkDirty()
+}
+
+;============================ Workspace-Anzeige ==============================
+; Wie bei GNOME: oben links auf jedem Monitor eine dunkle Pille mit einem Punkt pro
+; Workspace. Der dort angezeigte ist eine längliche Pille (weiß, wenn der Monitor aktiv
+; ist), leere Workspaces sind dunkler. Liegt im oberen Rand über den Fenstern.
+; Ein Klick öffnet die Übersicht auf diesem Monitor.
+UpdateIndicator() {
+    if !SHOW_INDICATOR || G.paused
+        return
+    for i, m in MONS {
+        key := ""
+        for sp in SPACES
+            key .= sp = m.space ? "A" : sp.cols.Length ? "x" : "o"
+        key .= (m.space = G.active ? "*" : "") "@" m.l "," m.t "," m.scale
+        entry := IND.Get(i, 0)
+        if entry && entry.key = key
+            continue
+        if entry
+            try entry.gui.Destroy()
+        IND[i] := DrawIndicator(m, key)
+    }
+    gone := []
+    for i in IND
+        if i > MONS.Length
+            gone.Push(i)
+    for i in gone {
+        try IND[i].gui.Destroy()
+        IND.Delete(i)
+    }
+}
+
+DrawIndicator(m, key) {
+    s := m.scale, d := Round(8 * s), pill := Round(24 * s), gap := Round(5 * s), pad := Round(4 * s)
+    w := 2 * pad - gap, hh := d + 2 * pad
+    for sp in SPACES
+        w += (sp = m.space ? pill : d) + gap
+    host := Gui("-Caption +ToolWindow +E0x08000000 -DPIScale")
+    host.BackColor := "101010"
+    x := pad, dots := []
+    for sp in SPACES {
+        dw := sp = m.space ? pill : d
+        c := sp = m.space ? (m.space = G.active ? "FFFFFF" : "B0B0B0") : sp.cols.Length ? "8A8A8A" : "454545"
+        dots.Push([host.Add("Text", Format("x{} y{} w{} h{} Background{}", x, pad, dw, d, c)), dw])
+        x += dw + gap
+    }
+    ; im oberen Rand über den Fenstern, links bündig mit dem Streifen
+    gx := m.l + Px(H_MARGIN, m), gy := m.t + Max(0, (Px(V_MARGIN, m) - hh) // 2)
+    host.Show(Format("x{} y{} w{} h{} NoActivate", gx, gy, w, hh))
+    RoundRegion(host.Hwnd, w, hh)
+    for e in dots                              ; Form erst nach dem Anzeigen, sonst verworfen
+        RoundRegion(e[1].Hwnd, e[2], d)
+    return {gui: host, key: key}
+}
+
+; Fensterform: Rechteck w×hh mit vollständig runden Enden
+RoundRegion(hwnd, w, hh) {
+    rgn := DllCall("CreateRoundRectRgn", "int", 0, "int", 0, "int", w + 1, "int", hh + 1, "int", hh, "int", hh, "ptr")
+    if !DllCall("SetWindowRgn", "ptr", hwnd, "ptr", rgn, "int", 1)
+        DllCall("DeleteObject", "ptr", rgn)
+}
+
+IndicatorClear() {
+    for i, entry in IND
+        try entry.gui.Destroy()
+    IND.Clear()
+}
+
+; Monitor, dessen Workspace-Anzeige hwnd ist (0 = keine)
+IndicatorMon(hwnd) {
+    for i, entry in IND
+        if entry.gui.Hwnd = hwnd
+            return i
+    return 0
+}
+
 OnDisplayChange() {
     Critical "On"
     AssignSpaces(LoadMonitors())
@@ -613,8 +731,7 @@ OnDisplayChange() {
     }
     if !G.active || !G.active.mon
         G.active := MONS[1].space
-    UpdateHighlight()
-    MarkDirty()
+    AfterChange()
 }
 
 MonAt(x, y) {
@@ -1273,12 +1390,16 @@ PeekDestroy(h) {
 PeekHwnd(h) => (pk := G.peeks.Get(h, 0)) && pk.key != "" ? pk.gui.Hwnd : 0
 
 PeekMouseActivate(wParam, lParam, msg, hwnd) {
-    if G.peekSrc.Has(hwnd) || (OV.gui && hwnd = OV.gui.Hwnd)
+    if G.peekSrc.Has(hwnd) || (OV.gui && hwnd = OV.gui.Hwnd) || IndicatorMon(hwnd)
         return 3                                        ; MA_NOACTIVATE
 }
 
 ; Klick auf eine Vorschau holt das Fenster in den Blick
 PeekClick(wParam, lParam, msg, hwnd) {
+    if mi := IndicatorMon(hwnd) {                       ; Workspace-Anzeige: Übersicht
+        SetTimer(OverviewToggle.Bind(mi), -1)
+        return 0
+    }
     if OV.gui && hwnd = OV.gui.Hwnd {
         OverviewClick(lParam << 48 >> 48, lParam << 32 >> 48)
         return 0
@@ -1562,8 +1683,7 @@ ProcessEvents() {
         catch Error as err
             Log("Event " Format("0x{:X}", e[1]) ": " err.Message " (Zeile " err.Line ")")
     }
-    UpdateHighlight()
-    MarkDirty()
+    AfterChange()
     if DEBUG
         Log(Format("events x{} {:.1f} ms", q.Length, QPC() - t0))
 }
@@ -1600,6 +1720,10 @@ HandleEvent(ev, h) {
 }
 
 OnFocus(h) {
+    ; Anderswo geklickt: Übersicht schließen. Nicht direkt nach dem Öffnen, da kommt noch
+    ; der Fokuswechsel vom Schließen des Startmenüs (zweites Tippen auf Windows).
+    if OV.active && A_TickCount - OV.opened > 500
+        OverviewClose()
     if A_TickCount < G.focusGrace       ; automatischer Fokuswechsel nach dem Schließen
         return
     if WINS.Has(h) {
@@ -1813,56 +1937,68 @@ SetBorderColor(h, c) {
 }
 
 ;=============================== Übersicht ===================================
-; Windows-Taste allein lange halten: alle Workspaces untereinander als verkleinerte
-; Streifen mit Live-Vorschauen (wie bei niri). Solange Windows gedrückt bleibt, wählen die
-; Pfeiltasten ein Fenster, Loslassen springt hin. Ein Klick wählt sofort, Esc bricht ab.
+; Doppelt auf die Windows-Taste tippen: alle Workspaces untereinander als verkleinerte
+; Streifen mit Live-Vorschauen (wie bei niri). Pfeiltasten/Tab wählen, Enter oder Klick
+; springt hin, Esc oder erneutes Doppeltippen schließt. Auch per Klick auf die
+; Workspace-Anzeige oben links.
 OverviewPress(*) {
-    if OV.armed || OV.active || OVERVIEW_DELAY <= 0 || G.paused
+    if OV.down || G.paused
         return                                 ; Tastenwiederholung beim Halten ignorieren
-    OV.armed := true, OV.clean := true
-    ; Jede andere Taste während des Haltens (Windows+X-Kombination) verhindert die Übersicht.
-    ; A_PriorKey taugt dafür nicht: Ohne Tastenwiederholung steht dort die Taste davor.
+    OV.down := A_TickCount, OV.clean := true
+    ; Jede andere Taste, solange Windows gedrückt ist (Windows+X-Kombination), zählt nicht
+    ; als Tippen. A_PriorKey taugt dafür nicht: Ohne Tastenwiederholung steht dort die
+    ; Taste vor der Windows-Taste.
     ih := InputHook("V L0")
     ih.KeyOpt("{All}", "N")
     ih.OnKeyDown := (hook, vk, sc) => (vk != 0x5B && vk != 0x5C) ? OV.clean := false : 0
     ih.Start()
     OV.ih := ih
-    SetTimer(OverviewHoldCheck, -OVERVIEW_DELAY)
 }
 
 OverviewRelease(*) {
-    OverviewDisarm()
-    SetTimer(OverviewHoldCheck, 0)
-}
-
-OverviewDisarm() {
-    OV.armed := false
+    if !OV.down
+        return
+    clean := OV.clean, held := A_TickCount - OV.down
+    OV.down := 0
     if OV.ih
         OV.ih.Stop(), OV.ih := 0
+    if !clean || held > 400 || OVERVIEW_DOUBLE_TAP <= 0 || G.paused || NAV.active {
+        OV.lastTap := 0
+        return
+    }
+    if OV.lastTap && A_TickCount - OV.lastTap <= OVERVIEW_DOUBLE_TAP {
+        OV.lastTap := 0
+        ; Das erste Tippen hat das Startmenü geöffnet, das zweite schließt es wieder
+        SetTimer(OverviewToggle, -60)
+    } else
+        OV.lastTap := A_TickCount
 }
 
-OverviewHoldCheck() {
-    clean := OV.clean
-    OverviewDisarm()
-    if DEBUG
-        Log(Format("Übersicht? sauber={} LWin={} RWin={} nav={}", clean
-            , GetKeyState("LWin", "P"), GetKeyState("RWin", "P"), NAV.active))
-    if G.paused || NAV.active || OV.active || !clean
-        return                                 ; inzwischen eine Windows+X-Kombination
-    if !GetKeyState("LWin", "P") && !GetKeyState("RWin", "P")
-        return
-    Send("{Blind}{vkE8}")                      ; sonst geht beim Loslassen das Startmenü auf
+OverviewToggle(mi := 0) {
     Critical "On"
-    try OverviewOpen()
+    if OV.active {
+        OverviewClose()
+        return
+    }
+    try OverviewOpen(mi)
     catch Error as e {
         Log("Übersicht: " e.Message " (Zeile " e.Line ")")
         OverviewClose()
     }
 }
 
-; watch: beim Loslassen der Windows-Taste zur Auswahl springen
-OverviewOpen(watch := true) {
-    mi := CurMonIdx(), m := MONS[mi], sc := m.scale
+; Tasten, solange die Übersicht offen ist (mit oder ohne Windows-Taste)
+OverviewIsOpen(*) => OV.active
+
+OverviewHotkey(hk) {
+    Critical "On"
+    if OV.active
+        OverviewKey(hk)
+}
+
+; mi: Monitor, auf dem die Übersicht erscheint (0 = aktueller)
+OverviewOpen(mi := 0) {
+    mi := mi || CurMonIdx(), m := MONS[mi], sc := m.scale
     mw := m.mr - m.ml, mh := m.mb - m.mt
     pad := Round(32 * sc), labH := Round(28 * sc), rowGap := Round(16 * sc)
     host := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08000000 -DPIScale")
@@ -1903,11 +2039,10 @@ OverviewOpen(watch := true) {
     loop 4
         OV.frame.Push(host.Add("Text", "x0 y0 w0 h0 Background" (HIGHLIGHT_COLOR != "" ? HIGHLIGHT_COLOR : AccentColor())))
     OV.active := true, OV.gui := host, OV.thumbs := thumbs, OV.items := items, OV.mon := mi
+    OV.opened := A_TickCount
     OverviewSelect(sel || 1)
     HideHighlight()
     host.Show(Format("x{} y{} w{} h{} NoActivate", m.ml, m.mt, mw, mh))
-    if watch
-        SetTimer(OverviewCheck, 30)
 }
 
 OverviewSelect(i) {
@@ -1923,14 +2058,17 @@ OverviewSelect(i) {
         c.Redraw()
 }
 
-; Pfeiltasten bei gehaltener Windows-Taste
+; Tasten in der Übersicht, mit oder ohne gehaltene Windows-Taste
 OverviewKey(hk) {
-    switch hk {
-        case "#Left": OverviewMove(-1, 0)
-        case "#Right": OverviewMove(1, 0)
-        case "#Up": OverviewMove(0, -1)
-        case "#Down": OverviewMove(0, 1)
-        case "#Escape": OverviewClose()
+    switch StrReplace(hk, "#") {
+        case "Left": OverviewMove(-1, 0)
+        case "Right": OverviewMove(1, 0)
+        case "Up": OverviewMove(0, -1)
+        case "Down": OverviewMove(0, 1)
+        case "Tab": OverviewSelect(Mod(OV.sel, OV.items.Length) + 1)
+        case "+Tab": OverviewSelect(Mod(OV.sel - 2 + OV.items.Length, OV.items.Length) + 1)
+        case "Enter", "NumpadEnter": OverviewApply(OV.sel)
+        case "Escape": OverviewClose()
     }
 }
 
@@ -1958,19 +2096,9 @@ DebugOverview(wParam, *) {
     if !DEBUG
         return
     SetTimer(() => (Critical("On")
-        , !wParam ? OverviewOpen(false) : wParam = 5 ? OverviewApply(OV.sel)
-        : OV.active ? OverviewKey(["#Left", "#Right", "#Up", "#Down"][wParam]) : 0), -1)
+        , !wParam ? OverviewOpen() : wParam = 5 ? OverviewApply(OV.sel)
+        : OV.active ? OverviewKey(["Left", "Right", "Up", "Down"][wParam]) : 0), -1)
     return 0
-}
-
-; Windows losgelassen: zur Auswahl springen
-OverviewCheck() {
-    if GetKeyState("LWin", "P") || GetKeyState("RWin", "P")
-        return
-    Critical "On"
-    SetTimer(OverviewCheck, 0)
-    if OV.active
-        OverviewApply(OV.sel)
 }
 
 OverviewClick(x, y) {
@@ -1998,12 +2126,10 @@ OverviewApply(i) {
         }
     } catch Error as e
         Log("Übersicht: " e.Message " (Zeile " e.Line ")")
-    UpdateHighlight()
-    MarkDirty()
+    AfterChange()
 }
 
 OverviewClose() {
-    SetTimer(OverviewCheck, 0)
     if !OV.active
         return
     OV.active := false
@@ -2027,8 +2153,7 @@ NavCheck() {
     Critical "On"
     SetTimer(NavCheck, 0)
     try EndNav()
-    UpdateHighlight()
-    MarkDirty()
+    AfterChange()
 }
 
 EndNav() {
@@ -2058,7 +2183,7 @@ MakeHandler(fn) => (*) => RunAction(fn)
 
 RunAction(fn) {
     Critical "On"
-    OV.clean := false                      ; Windows+Kürzel: keine Übersicht beim Halten
+    OV.clean := false                      ; Windows+Kürzel zählt nicht als Tippen auf Windows
     if G.paused
         return
     if OV.active {                         ; Übersicht offen: Pfeile wählen, Esc bricht ab
@@ -2075,6 +2200,13 @@ RunAction(fn) {
         Log(A_ThisHotkey ": " e.Message " (Zeile " e.Line ")")
         Osd("Fehler: " e.Message)
     }
+    AfterChange()
+}
+
+; Nach jeder Änderung: leere Workspaces aufräumen, Anzeige und Hervorhebung nachziehen
+AfterChange() {
+    TidySpaces()
+    UpdateIndicator()
     UpdateHighlight()
     MarkDirty()
 }
@@ -2582,8 +2714,8 @@ TogglePause(*) {
         return
     }
     SaveLayout()
-    OverviewRelease()
     OverviewClose()
+    IndicatorClear()
     G.paused := true
     Suspend(true)
     HideHighlight()
@@ -2597,6 +2729,7 @@ Cleanup(*) {
     if !G.paused
         SaveLayout()
     OverviewClose()
+    IndicatorClear()
     HideHighlight()
     RescueAll()
 }

@@ -81,11 +81,13 @@ Ausgeschaltet wird über einen Rechtsklick auf das grüne „H“ im Infobereich
 
 ## Tastenkürzel: Workspaces und Monitore
 
-Es gibt vier Workspaces, jeder Monitor zeigt einen davon. Beim Mitnehmen bleibt das aktive Fenster sichtbar, während der Workspace drumherum wechselt.
+Jeder Monitor zeigt einen Workspace. Wie bei GNOME entstehen und verschwinden Workspaces von selbst: Am Ende steht immer genau ein leerer. Schiebst du ein Fenster hinein, kommt ein neuer leerer dazu. Ein leerer Workspace verschwindet, sobald er nirgends mehr angezeigt wird, und die übrigen rücken nach. Löschen musst du also nie etwas. Beim Mitnehmen bleibt das aktive Fenster sichtbar, während der Workspace drumherum wechselt.
+
+**Workspace-Anzeige:** Oben links auf jedem Monitor steht wie bei GNOME eine kleine Pille mit einem Punkt pro Workspace. Der dort angezeigte Workspace ist der längliche Strich, weiß auf dem aktiven Monitor. Leere Workspaces sind dunkler. Ein Klick darauf öffnet die Übersicht.
 
 | Taste | Wirkung |
 | --- | --- |
-| Windows lange halten | Übersicht: alle Workspaces untereinander mit Live-Vorschauen der Fenster. Bei weiter gedrückter Windows-Taste wählen die Pfeiltasten ein Fenster, beim Loslassen springt PaperWM dorthin. Ein Klick wählt sofort, Windows+Esc bricht ab. Kurzes Tippen öffnet weiterhin das Startmenü. |
+| Windows zweimal kurz tippen | Übersicht: alle Workspaces untereinander mit Live-Vorschauen der Fenster. Pfeiltasten oder Tab wählen ein Fenster oder einen leeren Workspace, Enter oder ein Klick springt hin, Esc oder erneutes Doppeltippen schließt. Das erste Tippen öffnet kurz das Startmenü, das zweite schließt es wieder. |
 | Windows+Bild↓ / Windows+Bild↑ | Nächster / vorheriger Workspace |
 | Windows+Strg+Bild↓ / Windows+Strg+Bild↑ | Aktives Fenster in den nächsten / vorherigen Workspace mitnehmen |
 | Windows+^ | Zum zuletzt benutzten Workspace. Windows-Taste gedrückt halten und ^ mehrmals drücken blättert weiter. |
@@ -127,9 +129,9 @@ Alle Einstellungen stehen am Anfang von `PaperWM.ahk`. Nach einer Änderung im T
 | `WINDOW_GAP`, `H_MARGIN`, `V_MARGIN`, `V_MARGIN_BOTTOM` | Abstand zwischen den Fenstern und zum Bildschirmrand (Standard 20 px). Alle px-Angaben gelten für 100 % Skalierung und werden pro Monitor umgerechnet. |
 | `RESIZE_STEP`, `DRIFT_STEP`, `MIN_COL_WIDTH` | Schrittweite für Windows++/- und Windows+Ö/Ä, schmalste Spalte |
 | `WIDTH_STEPS`, `HEIGHT_STEPS` | Stufen für Windows+R bzw. Windows+Shift+R |
-| `NUM_WORKSPACES` | Anzahl der Workspaces (mindestens so viele wie Monitore) |
 | `ANIM_MS` | Dauer der Animationen in ms, `0` = aus (Standard 180) |
-| `OVERVIEW_DELAY` | Wie lange die Windows-Taste allein gehalten werden muss, bis die Übersicht erscheint, in ms, `0` = aus (Standard 400) |
+| `OVERVIEW_DOUBLE_TAP` | Höchstabstand zwischen zwei Tipps auf Windows für die Übersicht, in ms, `0` = aus (Standard 400) |
+| `SHOW_INDICATOR` | Workspace-Anzeige oben links an / aus |
 | `HIGHLIGHT`, `HIGHLIGHT_COLOR`, `HIGHLIGHT_WIDTH` | Rahmen um das aktive Fenster: an/aus, Farbe (leer = Windows-Akzentfarbe, sonst z. B. `"4A90E2"`), Stärke |
 | `HIGHLIGHT_DWM` | Zusätzlich den Windows-11-Fensterrand des aktiven Fensters einfärben |
 | `FLOAT_EXES`, `FLOAT_CLASSES` | Programme bzw. Fensterklassen, die schweben statt gekachelt zu werden |
@@ -139,7 +141,7 @@ Alle Einstellungen stehen am Anfang von `PaperWM.ahk`. Nach einer Änderung im T
 ## Wie es funktioniert und wo die Grenzen sind
 
 - **Überschriebene Windows-Kürzel:** Solange PaperWM läuft, belegt es Windows+R (Ausführen), Windows+N, Windows+I, Windows+C, Windows+T, Windows+. (Emoji), Windows+Tab und Alt+Tab. Windows+V (Zwischenablage) bleibt frei. Zum vorübergehenden Benutzen im Tray-Menü pausieren.
-- **Gehaltene Tasten:** Windows+T, mehrmaliges Windows+^ oder Windows+Tab und die Übersicht wirken nur, solange die Windows-Taste gedrückt bleibt.
+- **Gehaltene Tasten:** Windows+T und mehrmaliges Windows+^ oder Windows+Tab wirken nur, solange die Windows-Taste gedrückt bleibt.
 - **Versteckte Fenster:** Fenster außerhalb des sichtbaren Bereichs und auf versteckten Workspaces werden unsichtbar geschaltet („cloaking“, derselbe Mechanismus wie bei den virtuellen Desktops von Windows). Sie bleiben dabei auf ihrem Monitor und in ihrer Größe, in Taskleiste und Alt+Tab. Fehlt dieser Mechanismus, werden sie ersatzweise rechts außerhalb aller Monitore geparkt.
 - **Fenster am Rand zum Nachbarmonitor:** Unter Windows liegen alle Monitore auf einer gemeinsamen Fläche. Ein Fenster, das über die Kante ragt, erschiene also auf dem Nachbarmonitor. Deshalb ist das echte Fenster dort unsichtbar, und an seiner Stelle zeigt PaperWM eine Live-Vorschau in voller Größe, genau an der Monitorgrenze abgeschnitten. Nichts wird gestaucht, nichts ragt hinüber. Ein Klick auf die Vorschau holt das Fenster in den Blick. Am äußeren Rand ohne Nachbarmonitor ragt das echte Fenster einfach aus dem Bild. Die Erkennung richtet sich nach der tatsächlichen Monitoranordnung und funktioniert mit beliebig vielen Monitoren in jeder Größe.
   - Chrome, Edge, VS Code, Teams und andere Chromium/Electron-Apps zeichnen nicht, solange sie unsichtbar sind. Ihre Vorschau am Rand zeigt deshalb das letzte Bild, bis sie hereingescrollt werden.
