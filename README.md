@@ -37,6 +37,8 @@ To turn it off: `Unregister-ScheduledTask PaperWM` (also as administrator).
 | `rescue.ahk` | Emergency: makes hidden windows visible again after a crash |
 | `PaperWM.layout` | Saved workspace layout, created on first start |
 | `PaperWM.log` | Error log and start time |
+| `Sessions` | Saved sessions (see "Sessions") |
+| `Sessions` | Saved sessions (see "Sessions") |
 
 ## Turning it off
 
@@ -121,6 +123,23 @@ The scratch layer keeps floating windows outside the strip, such as a calculator
 - Click a taskbar icon: brings the window into view, even from another workspace.
 - Click the preview of a cut-off window at the monitor edge: brings the window into view.
 
+## Sessions
+
+A session stores all workspaces with all windows and remembers how each program is started. When you load it, PaperWM starts the missing programs and puts every window in its place. Programs that are already running (such as Teams via autostart) are reused instead of being started twice.
+
+- **Save:** right-click the tray icon → "Sitzung speichern …" (save session) and enter a name, such as "Work" or "Uni".
+- **Load:** tray → "Sitzung laden" (load session). It also lists "Letzte Sitzung" (last session): the state at the last shutdown.
+- **Delete:** tray → "Sitzung löschen" (delete session).
+- **After boot**, PaperWM asks how to start: "Leer starten" (start empty), "Letzte Sitzung" (last session) or a saved session. Without a choice it continues with "start empty" after 15 seconds.
+
+Limits:
+
+- **Content** is restored by the programs themselves, not by PaperWM. Chrome reopens its tabs if "Continue where you left off" is set in Chrome. VS Code opens the last folder, Obsidian the vault, Explorer the saved folder. Other programs only open an empty window.
+- If a program needs several windows, PaperWM starts it several times if needed. Programs that only allow one window get only one.
+- Started programs run without admin rights, even if PaperWM itself runs as admin.
+
+Sessions are stored as files in the `Sessions` folder.
+
 ## Settings
 
 All settings are at the top of `PaperWM.ahk`. After a change, choose "Neu laden" (reload) in the tray menu.
@@ -137,6 +156,7 @@ All settings are at the top of `PaperWM.ahk`. After a change, choose "Neu laden"
 | `HIGHLIGHT_DWM` | Also color the Windows 11 border of the active window |
 | `FLOAT_EXES`, `FLOAT_CLASSES` | Programs or window classes that float instead of being tiled |
 | `IGNORE_EXES`, `IGNORE_CLASSES` | Programs or window classes that PaperWM ignores entirely |
+| `STARTUP_PROMPT`, `STARTUP_TIMEOUT` | Prompt after boot on / off, seconds until "start empty" (default 15) |
 | `KEYMAP` | All shortcuts |
 
 ## How it works and where the limits are

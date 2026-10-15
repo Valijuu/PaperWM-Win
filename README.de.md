@@ -37,6 +37,8 @@ Zum Abschalten: `Unregister-ScheduledTask PaperWM` (ebenfalls als Administrator)
 | `rescue.ahk` | Notfall: macht nach einem Absturz versteckte Fenster wieder sichtbar |
 | `PaperWM.layout` | Gespeicherte Aufteilung der Workspaces, wird beim ersten Start angelegt |
 | `PaperWM.log` | Fehlerprotokoll und Startzeit |
+| `Sessions` | Gespeicherte Sitzungen (siehe „Sitzungen“) |
+| `Sessions` | Gespeicherte Sitzungen (siehe „Sitzungen“) |
 
 ## Ausschalten
 
@@ -121,6 +123,23 @@ Der Scratch-Layer hält schwebende Fenster außerhalb des Streifens, etwa einen 
 - Klick auf ein Taskleisten-Symbol: Holt das Fenster in den Blick, auch von einem anderen Workspace.
 - Klick auf die Vorschau eines angeschnittenen Fensters am Monitorrand: Holt das Fenster in den Blick.
 
+## Sitzungen
+
+Eine Sitzung speichert alle Workspaces mit allen Fenstern und merkt sich, wie jedes Programm gestartet wird. Lädst du sie wieder, startet PaperWM die fehlenden Programme und legt jedes Fenster an seinen Platz. Programme, die schon laufen (z. B. Teams per Autostart), werden wiederverwendet statt doppelt gestartet.
+
+- **Speichern:** Rechtsklick auf das Tray-Symbol → „Sitzung speichern …“ und einen Namen eingeben, z. B. „Arbeit“ oder „Uni“.
+- **Laden:** Tray → „Sitzung laden“. Dort steht auch „Letzte Sitzung“: der Stand beim letzten Herunterfahren.
+- **Löschen:** Tray → „Sitzung löschen“.
+- **Nach dem Hochfahren** fragt PaperWM, womit es losgehen soll: „Leer starten“, „Letzte Sitzung“ oder eine gespeicherte Sitzung. Ohne Auswahl geht es nach 15 Sekunden mit „Leer starten“ weiter.
+
+Grenzen:
+
+- **Inhalte** stellen die Programme selbst wieder her, nicht PaperWM. Chrome öffnet seine Tabs, wenn in Chrome „Dort weitermachen, wo ich aufgehört habe“ eingestellt ist. VS Code öffnet den letzten Ordner, Obsidian den Vault, der Explorer den gespeicherten Ordner. Andere Programme öffnen nur ein leeres Fenster.
+- Braucht ein Programm mehrere Fenster, startet PaperWM es bei Bedarf mehrmals. Programme, die nur ein Fenster zulassen, bekommen nur eins.
+- Gestartete Programme laufen ohne Admin-Rechte, auch wenn PaperWM selbst als Admin läuft.
+
+Die Sitzungen liegen als Dateien im Ordner `Sessions`.
+
 ## Einstellungen
 
 Alle Einstellungen stehen am Anfang von `PaperWM.ahk`. Nach einer Änderung im Tray-Menü „Neu laden“ wählen.
@@ -137,6 +156,7 @@ Alle Einstellungen stehen am Anfang von `PaperWM.ahk`. Nach einer Änderung im T
 | `HIGHLIGHT_DWM` | Zusätzlich den Windows-11-Fensterrand des aktiven Fensters einfärben |
 | `FLOAT_EXES`, `FLOAT_CLASSES` | Programme bzw. Fensterklassen, die schweben statt gekachelt zu werden |
 | `IGNORE_EXES`, `IGNORE_CLASSES` | Programme bzw. Fensterklassen, die PaperWM ganz ignoriert |
+| `STARTUP_PROMPT`, `STARTUP_TIMEOUT` | Abfrage nach dem Hochfahren an / aus, Sekunden bis „Leer starten“ (Standard 15) |
 | `KEYMAP` | Alle Tastenkürzel |
 
 ## Wie es funktioniert und wo die Grenzen sind

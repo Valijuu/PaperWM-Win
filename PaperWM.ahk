@@ -45,6 +45,11 @@ global HIGHLIGHT_DWM   := true    ; zusätzlich den Windows-11-Fensterrand einf�
 
 ; Workspace-Aufteilung wird hier gespeichert und beim Start wiederhergestellt
 global LAYOUT_FILE     := A_ScriptDir "\PaperWM.layout"
+global SESSION_DIR     := A_ScriptDir "\Sessions"         ; gespeicherte Sitzungen
+global LAST_FILE       := A_ScriptDir "\PaperWM.last"     ; Stand beim letzten Herunterfahren
+global BOOT_FILE       := A_ScriptDir "\PaperWM.boot"     ; erkennt den ersten Start nach dem Hochfahren
+global STARTUP_PROMPT  := true    ; nach dem Hochfahren fragen: leer / letzte / gespeicherte Sitzung
+global STARTUP_TIMEOUT := 15      ; Sekunden bis „Leer starten“ automatisch gewählt wird
 global DEBUG           := InList("/debug", A_Args)   ; Zeitmessung ins PaperWM.log
 
 ; Fenster, die nie gekachelt werden (Shell, Overlays …)
@@ -145,6 +150,8 @@ global TAKEN := []         ; mit Super+T aufgenommene Fenster
 global OPEN_POSITIONS := ["right", "left", "start", "end", "down"]
 global G := {active: 0, scratch: [], q: [], openPos: "right", focusCenter: false, paused: false
     , focusGrace: 0, hooks: [], parkX: 0, parkY: 0, osd: 0, osdText: 0, dirty: false
+    , launch: Map()        ; hwnd → wie das Programm gestartet wird (für Sitzungen)
+    , restore: 0, frozen: false, loadMenu: Menu(), delMenu: Menu()
     , minimized: Map()     ; hwnd → Platz im Streifen, solange das Fenster minimiert ist
     , placed: Map()        ; hwnd → zuletzt gesetzte Position (spart Abfragen)
     , borders: Map()       ; hwnd → unsichtbare Fensterränder
@@ -233,6 +240,9 @@ global ACTIONS := Map(
 ;================================= Start =====================================
 OnError(LogError)      ; Fehler ins Log statt blockierendem Dialog
 t0 := A_TickCount
+firstBoot := FirstStartSinceBoot()
+if firstBoot && FileExist(LAYOUT_FILE)            ; Stand vom letzten Mal als „Letzte Sitzung“
+    try FileCopy(LAYOUT_FILE, LAST_FILE, 1)
 InitHighlight()
 CloakInit()
 Init()
@@ -253,6 +263,7 @@ for r in [[0x0003, 0x0003], [0x000A, 0x000B], [0x0016, 0x0017], [0x8001, 0x8003]
 OnMessage(0x7E, (*) => SetTimer(OnDisplayChange, -1000))   ; WM_DISPLAYCHANGE
 OnMessage(0x5555, (*) => SetTimer(DumpState, -1))          ; Debug: Zustand in PaperWM.state.txt schreiben
 OnMessage(0x5556, DebugOverview)                            ; Debug: Übersicht ohne Halten öffnen/Taste senden
+OnMessage(0x5557, (*) => DEBUG ? SetTimer(RestoreSession.Bind(SessionFile("_test")), -1) : 0)  ; Debug: Sitzung „_test“ laden
 OnMessage(0x21, PeekMouseActivate)                          ; WM_MOUSEACTIVATE: Vorschau nicht aktivieren
 OnMessage(0x201, PeekClick)                                 ; WM_LBUTTONDOWN auf einer Vorschau
 OnMessage(0x204, IndicatorRightClick)                       ; WM_RBUTTONDOWN: Workspace umbenennen
@@ -265,6 +276,11 @@ A_TrayMenu.Delete()
 A_TrayMenu.Add("Pausieren / Fortsetzen", TogglePause)
 A_TrayMenu.Add("Alle Fenster zurückholen", (*) => RescueAll())
 A_TrayMenu.Add()
+A_TrayMenu.Add("Sitzung speichern …", (*) => SetTimer(SaveSessionPrompt, -1))
+A_TrayMenu.Add("Sitzung laden", G.loadMenu)
+A_TrayMenu.Add("Sitzung löschen", G.delMenu)
+BuildSessionMenus()
+A_TrayMenu.Add()
 A_TrayMenu.Add("Neu laden", (*) => Reload())
 A_TrayMenu.Add("Beenden", (*) => ExitApp())
 
@@ -275,6 +291,8 @@ SaveLayout()
 Osd("PaperWM aktiv – " WINS.Count " Fenster")
 Log(Format("Start: {:.1f} s nach Systemstart, Einrichtung {} ms, {} Fenster, Cloak {}"
     , t0 / 1000, A_TickCount - t0, WINS.Count, G.canCloak ? "an" : "aus"))
+if firstBoot && STARTUP_PROMPT
+    SetTimer(StartupPrompt, -1000)
 
 Init() {
     old := LoadMonitors()
@@ -455,8 +473,28 @@ MarkDirty() {
 SaveLayout() {
     Critical "On"
     G.dirty := false
-    if !SPACES.Length
+    if !SPACES.Length || G.frozen               ; frozen: Sitzung wird gerade geladen
         return
+    WriteFile(LAYOUT_FILE, LayoutText())
+}
+
+; Datei ersetzen, ohne dass bei einem Absturz eine halbe Datei übrig bleibt
+WriteFile(path, text) {
+    tmp := path ".tmp"
+    try {
+        if FileExist(tmp)
+            FileDelete(tmp)
+        FileAppend(text, tmp, "UTF-8")
+        FileMove(tmp, path, 1)
+        return true
+    } catch Error as e {
+        Log("Speichern von " path ": " e.Message)
+        return false
+    }
+}
+
+; Aktueller Zustand als Text: Workspaces, Spalten, Fenster samt Startinformationen
+LayoutText() {
     s := "V`t2`n"
     s .= "S`topenPos`t" G.openPos "`nS`tfocusCenter`t" (G.focusCenter ? 1 : 0) "`n"
     s .= "N`t" SPACES.Length "`nA`t" (G.active ? G.active.idx : 1) "`n"
@@ -471,21 +509,14 @@ SaveLayout() {
         for col in sp.cols {
             s .= Format("C`t{}`t{}`t{}`t{}`t{}`n", Round(col.width, 5), col.full ? 1 : 0, col.focusRow, Round(col.prevWidth, 5), col.ord)
             for ri, h in col.wins
-                s .= "H`t" h "`t" Round(col.fracs[ri], 4) "`t" WinIdent(h) "`n"
+                s .= "H`t" h "`t" Round(col.fracs[ri], 4) "`t" WinIdent(h) "`t" LaunchIdent(h) "`n"
         }
     }
     for h in G.scratch
-        s .= "X`t" h "`t" WinIdent(h) "`n"
+        s .= "X`t" h "`t" WinIdent(h) "`t" LaunchIdent(h) "`n"
     for h, z in G.minimized
         s .= Format("Z`t{}`t{}`t{}`t{}`t{}`t{}`n", z.sp.idx, z.ord, z.row, Round(z.width, 5), h, WinIdent(h))
-    tmp := LAYOUT_FILE ".tmp"
-    try {
-        if FileExist(tmp)
-            FileDelete(tmp)
-        FileAppend(s, tmp, "UTF-8")
-        FileMove(tmp, LAYOUT_FILE, 1)
-    } catch Error as e
-        Log("Layout speichern: " e.Message)
+    return s
 }
 
 WinIdent(h) {
@@ -493,13 +524,13 @@ WinIdent(h) {
     return i.exe "`t" i.cls "`t" RegExReplace(i.title, "[\t\r\n]", " ")
 }
 
-LoadLayout() {
-    if !FileExist(LAYOUT_FILE)
+LoadLayout(file := LAYOUT_FILE) {
+    if !FileExist(file)
         return 0
     st := {settings: Map(), n: 0, active: 1, mons: [], mru: [], spaces: Map(), scratch: [], minimized: []}
     ws := 0, col := 0
     try {
-        loop parse FileRead(LAYOUT_FILE, "UTF-8"), "`n", "`r" {
+        loop parse FileRead(file, "UTF-8"), "`n", "`r" {
             f := StrSplit(A_LoopField, "`t")
             if f.Length < 2
                 continue
@@ -523,9 +554,11 @@ LoadLayout() {
                 case "H":
                     if col
                         col.wins.Push({hwnd: Num(f[2]), frac: Float(Fld(f, 3) = "" ? 1 : Fld(f, 3))
-                            , exe: Fld(f, 4), cls: Fld(f, 5), title: Fld(f, 6), match: 0})
+                            , exe: Fld(f, 4), cls: Fld(f, 5), title: Fld(f, 6), match: 0
+                            , path: Fld(f, 7), args: Fld(f, 8), aumid: Fld(f, 9)})
                 case "X":
-                    st.scratch.Push({hwnd: Num(f[2]), exe: Fld(f, 3), cls: Fld(f, 4), title: Fld(f, 5), match: 0})
+                    st.scratch.Push({hwnd: Num(f[2]), exe: Fld(f, 3), cls: Fld(f, 4), title: Fld(f, 5), match: 0
+                        , path: Fld(f, 6), args: Fld(f, 7), aumid: Fld(f, 8)})
                 case "Z":
                     st.minimized.Push({space: Num(f[2]), ord: Float(Fld(f, 3) = "" ? 0 : Fld(f, 3)), row: Num(Fld(f, 4))
                         , width: Flt(Fld(f, 5)), hwnd: Num(Fld(f, 6)), exe: Fld(f, 7), cls: Fld(f, 8), title: Fld(f, 9), match: 0})
@@ -541,6 +574,333 @@ LoadLayout() {
 Fld(f, i) => i <= f.Length ? f[i] : ""
 
 PeriodicSave() => SaveLayout()     ; eigene Funktion, damit MarkDirty diesen Timer nicht ersetzt
+
+;=============================== Sitzungen ===================================
+; Eine Sitzung ist ein gespeichertes Layout (alle Workspaces und Fenster) samt der Angabe,
+; wie jedes Programm gestartet wird. Beim Laden werden schon offene Fenster
+; wiederverwendet, fehlende Programme gestartet und alles an seinen Platz gelegt.
+; Beim ersten Start nach dem Hochfahren fragt PaperWM, womit es losgehen soll.
+
+; Wie das Programm des Fensters h wieder gestartet wird (Pfad, Parameter, App-ID)
+LaunchInfo(h) {
+    if (li := G.launch.Get(h, 0)) && !li.dyn
+        return li
+    li := {path: "", args: "", aumid: "", dyn: false}
+    try li.path := WinGetProcessPath(h)
+    li.aumid := ViewAumid(h)
+    cls := ""
+    try cls := WinGetClass(h)
+    if cls = "CabinetWClass" {                  ; Datei-Explorer: geöffneten Ordner merken
+        li.dyn := true
+        try for w in ComObject("Shell.Application").Windows
+            if w.HWND = h {
+                li.args := '"' w.Document.Folder.Self.Path '"'
+                break
+            }
+    } else if li.path != "" && !IsPackaged(li.path)
+        try li.args := ProcessArgs(WinGetPID(h))
+    G.launch[h] := li
+    return li
+}
+
+; Für die Layout-Datei: Pfad, Parameter, App-ID (ohne Tabs und Zeilenumbrüche)
+LaunchIdent(h) {
+    li := LaunchInfo(h), s := ""
+    for v in [li.path, li.args, li.aumid]
+        s .= (A_Index > 1 ? "`t" : "") RegExReplace(v, "[\t\r\n]", " ")
+    return s
+}
+
+; Store-Apps und App-Rahmen lassen sich nur über ihre App-ID starten
+IsPackaged(path) => InStr(path, "\WindowsApps\") || InStr(path, "\ApplicationFrameHost.exe")
+
+; App-ID (AppUserModelID) des Fensters über die Shell (IApplicationView, Methode 17)
+ViewAumid(h) {
+    if !G.views
+        return ""
+    view := 0, p := 0, s := ""
+    try {
+        ComCall(6, G.views, "ptr", h, "ptr*", &view)              ; GetViewForHwnd
+        ComCall(17, view, "ptr*", &p)                             ; GetAppUserModelId
+        if p
+            s := StrGet(p, "UTF-16"), DllCall("ole32\CoTaskMemFree", "ptr", p)
+    }
+    if view
+        ObjRelease(view)
+    return s
+}
+
+; Startparameter eines Prozesses (Kommandozeile ohne das Programm selbst)
+ProcessArgs(pid) {
+    for p in ComObjGet("winmgmts:").ExecQuery("SELECT CommandLine FROM Win32_Process WHERE ProcessId=" pid) {
+        cl := ""
+        try cl := Trim(p.CommandLine)
+        if SubStr(cl, 1, 1) = '"'
+            cl := SubStr(cl, InStr(cl, '"', , 2) + 1)
+        else
+            cl := (i := InStr(cl, " ")) ? SubStr(cl, i + 1) : ""
+        return Trim(cl)
+    }
+    return ""
+}
+
+; Startet das Programm eines gespeicherten Fensters. Läuft PaperWM als Admin, startet die
+; Shell das Programm, damit es nicht ebenfalls Admin-Rechte bekommt.
+LaunchRecord(r) {
+    if r.aumid != "" && (r.path = "" || IsPackaged(r.path))
+        target := "shell:AppsFolder\" r.aumid, args := ""
+    else if r.path != ""
+        target := r.path, args := r.args
+    else
+        return false
+    try {
+        if A_IsAdmin
+            ShellRun(target, args)
+        else
+            Run('"' target '"' (args != "" ? " " args : ""))
+        return true
+    } catch Error as e {
+        Log("Start von " target ": " e.Message)
+        return false
+    }
+}
+
+; ShellExecute über den Explorer (läuft ohne Admin-Rechte), nach Lexikos
+ShellRun(file, args := "") {
+    desktop := ComObject("Shell.Application").Windows.FindWindowSW(0, 0, 8, 0, 1)  ; SWC_DESKTOP
+    tlb := ComObjQuery(desktop, "{4C96BE40-915C-11CF-99D3-00AA004AE837}"        ; SID_STopLevelBrowser
+        , "{000214E2-0000-0000-C000-000000000046}")                            ; IID_IShellBrowser
+    ComCall(15, tlb, "ptr*", sv := ComValue(13, 0))          ; QueryActiveShellView
+    iid := Buffer(16)
+    NumPut("int64", 0x20400, "int64", 0x46000000000000C0, iid)   ; IID_IDispatch
+    ComCall(15, sv, "uint", 0, "ptr", iid, "ptr*", sfvd := ComValue(9, 0))   ; GetItemObject
+    sfvd.Application.ShellExecute(file, args)
+}
+
+LaunchKey(r) => r.aumid != "" && (r.path = "" || IsPackaged(r.path)) ? "app:" r.aumid
+    : r.path != "" ? r.path "|" r.args : ""
+
+; Alle Fenster einer Sitzung: gekachelte und Scratch-Fenster in Dateireihenfolge
+SessionRecords(st) {
+    recs := []
+    idx := []
+    for i in st.spaces
+        idx.Push(i)
+    for i in idx
+        for c in st.spaces[i].cols
+            for r in c.wins
+                recs.Push(r)
+    for r in st.scratch
+        recs.Push(r)
+    return recs
+}
+
+; Kachelbare Fenster, die gerade offen sind (Kandidaten für die Zuordnung)
+OpenCandidates(skip) {
+    cands := Map()
+    for h in WinGetList()
+        if !skip.Has(h) && IsTileable(h)
+            cands[h] := WinInfo(h)
+    return cands
+}
+
+; Lädt eine Sitzung: offene Fenster wiederverwenden, fehlende Programme starten, warten,
+; dann das Layout schreiben und PaperWM neu laden (Init legt alles an seinen Platz)
+RestoreSession(file, *) {
+    if G.restore || !(st := LoadLayout(file))
+        return
+    recs := SessionRecords(st), used := Map()
+    for r in recs
+        r.hwnd := 0                               ; alte Handles gelten nicht mehr
+    MatchRecords(recs, OpenCandidates(used), used)
+    groups := Map()
+    for r in recs
+        if !r.match && (k := LaunchKey(r)) != "" {
+            if !groups.Has(k)
+                groups[k] := {first: r, recs: [], launched: 0, last: 0}
+            groups[k].recs.Push(r)
+        }
+    for k, grp in groups
+        if LaunchRecord(grp.first)
+            grp.launched := 1, grp.last := A_TickCount
+    G.restore := {file: file, recs: recs, used: used, groups: groups, start: A_TickCount}
+    Osd("Sitzung wird geladen …")
+    SetTimer(RestoreTick, 500)
+}
+
+RestoreTick() {
+    Critical "On"
+    rs := G.restore
+    if !rs {
+        SetTimer(RestoreTick, 0)
+        return
+    }
+    open := []
+    for r in rs.recs
+        if !r.match
+            open.Push(r)
+    if open.Length
+        MatchRecords(open, OpenCandidates(rs.used), rs.used)
+    missing := 0, total := 0
+    for r in rs.recs
+        if LaunchKey(r) != "" || r.match
+            total++, missing += !r.match
+    elapsed := A_TickCount - rs.start
+    if missing && elapsed < 30000 {
+        ; Brauchen Programme mehrere Fenster (z. B. drei Chrome-Fenster) und kommt nichts
+        ; mehr nach, ein weiteres Mal starten
+        if elapsed > 6000
+            for k, grp in rs.groups {
+                need := 0
+                for r in grp.recs
+                    need += !r.match
+                if need && grp.launched < grp.recs.Length && A_TickCount - grp.last > 4000
+                    if LaunchRecord(grp.first)
+                        grp.launched++, grp.last := A_TickCount
+            }
+        Osd(Format("Sitzung wird geladen … {} von {} Fenstern", total - missing, total))
+        return
+    }
+    SetTimer(RestoreTick, 0)
+    if missing
+        Log(Format("Sitzung: {} Fenster sind nicht erschienen", missing))
+    if DEBUG
+        for r in rs.recs
+            Log(Format("Sitzung: {} / {} → {}", r.exe, r.cls, r.match))
+    ; Layout mit den zugeordneten Fenstern schreiben (H/X-Zeilen in Dateireihenfolge)
+    out := "", i := 0
+    loop parse FileRead(rs.file, "UTF-8"), "`n", "`r" {
+        line := A_LoopField
+        if line = ""
+            continue
+        f := StrSplit(line, "`t")
+        if (f[1] = "H" || f[1] = "X") && ++i <= rs.recs.Length {
+            f[2] := rs.recs[i].match
+            line := ""
+            for v in f
+                line .= (A_Index > 1 ? "`t" : "") v
+        }
+        out .= line "`n"
+    }
+    G.restore := 0
+    ; Nicht mehr speichern bis zum Neuladen: Reload() kehrt sofort zurück, und das Aufräumen
+    ; beim Beenden würde sonst den alten Stand über die Sitzung schreiben
+    G.frozen := true
+    if WriteFile(LAYOUT_FILE, out)
+        Reload()
+    SetTimer(() => G.frozen := false, -5000)      ; nur falls das Neuladen scheitert
+}
+
+SessionFile(name) => SESSION_DIR "\" name ".session"
+
+SessionList() {
+    names := []
+    loop files SESSION_DIR "\*.session"
+        names.Push(SubStr(A_LoopFileName, 1, -8))
+    return names
+}
+
+; Tray: aktuellen Zustand als Sitzung speichern
+SaveSessionPrompt(*) {
+    ib := InputBox("Name der Sitzung (z. B. Arbeit, Uni):", "Sitzung speichern", "w360 h130")
+    if ib.Result != "OK"
+        return
+    name := Trim(RegExReplace(ib.Value, '[\\/:*?"<>|\t\r\n]', ""))
+    if name = ""
+        return
+    if FileExist(SessionFile(name))
+        && MsgBox("Die Sitzung „" name "“ gibt es schon. Überschreiben?", "Sitzung speichern", "YesNo Icon?") != "Yes"
+        return
+    DirCreate(SESSION_DIR)
+    Critical "On"
+    if WriteFile(SessionFile(name), LayoutText())
+        Osd("Sitzung „" name "“ gespeichert")
+    BuildSessionMenus()
+}
+
+DeleteSession(name, *) {
+    if MsgBox("Sitzung „" name "“ löschen?", "Sitzung löschen", "YesNo Icon?") != "Yes"
+        return
+    try FileDelete(SessionFile(name))
+    BuildSessionMenus()
+}
+
+; Untermenüs „Sitzung laden“ und „Sitzung löschen“ im Tray
+BuildSessionMenus() {
+    G.loadMenu.Delete(), G.delMenu.Delete()
+    names := SessionList()
+    if FileExist(LAST_FILE)
+        G.loadMenu.Add("Letzte Sitzung (" FormatTime(FileGetTime(LAST_FILE), "dd.MM. HH:mm") ")"
+            , (*) => RestoreSession(LAST_FILE))
+    for name in names {
+        G.loadMenu.Add(name, RestoreSession.Bind(SessionFile(name)))
+        G.delMenu.Add(name, DeleteSession.Bind(name))
+    }
+    if !names.Length {
+        G.delMenu.Add("(keine)", (*) => 0), G.delMenu.Disable("(keine)")
+        if !FileExist(LAST_FILE)
+            G.loadMenu.Add("(keine)", (*) => 0), G.loadMenu.Disable("(keine)")
+    }
+}
+
+; Erster Start seit dem Hochfahren? (Startzeitpunkt von Windows in PaperWM.boot gemerkt)
+FirstStartSinceBoot() {
+    boot := DateAdd(A_Now, -(A_TickCount // 1000), "Seconds")
+    prev := ""
+    try prev := Trim(FileRead(BOOT_FILE))
+    if prev != "" && IsNumber(prev) && Abs(DateDiff(boot, prev, "Seconds")) < 120
+        return false
+    try FileDelete(BOOT_FILE)
+    try FileAppend(boot, BOOT_FILE)
+    return true
+}
+
+; Abfrage nach dem Hochfahren: leer starten, letzte Sitzung oder gespeicherte Sitzung.
+; Ohne Eingabe geht es nach STARTUP_TIMEOUT Sekunden mit „Leer starten“ weiter.
+StartupPrompt() {
+    opts := [{label: "Leer starten", file: ""}]
+    if FileExist(LAST_FILE)
+        opts.Push({label: "Letzte Sitzung (" FormatTime(FileGetTime(LAST_FILE), "dd.MM. HH:mm") ")", file: LAST_FILE})
+    for name in SessionList()
+        opts.Push({label: name, file: SessionFile(name)})
+    if opts.Length < 2
+        return
+    labels := []
+    for o in opts
+        labels.Push(o.label)
+    host := Gui("+AlwaysOnTop -MinimizeBox", "PaperWM")
+    host.SetFont("s11", "Segoe UI")
+    host.Add("Text", "w380", "Womit möchtest du starten?")
+    lb := host.Add("ListBox", "w380 r" Min(opts.Length, 10) " Choose1", labels)
+    cd := host.Add("Text", "w380 cGray")
+    btn := host.Add("Button", "w120 Default", "Starten")
+    left := STARTUP_TIMEOUT
+    tick := 0
+    done(idx) {
+        SetTimer(tick, 0)
+        try host.Destroy()
+        if idx && opts[idx].file != ""
+            RestoreSession(opts[idx].file)
+    }
+    stop(*) {                                     ; Auswahl begonnen: kein Countdown mehr
+        SetTimer(tick, 0)
+        cd.Value := ""
+    }
+    countdown() {
+        if --left <= 0
+            return done(1)
+        cd.Value := "„Leer starten“ in " left " s"
+    }
+    tick := countdown
+    lb.OnEvent("Change", stop)
+    lb.OnEvent("DoubleClick", (*) => done(lb.Value))
+    btn.OnEvent("Click", (*) => done(lb.Value))
+    host.OnEvent("Close", (*) => done(0))
+    host.OnEvent("Escape", (*) => done(0))
+    cd.Value := "„Leer starten“ in " left " s"
+    host.Show()
+    SetTimer(tick, 1000)
+}
 
 Num(s) => IsNumber(s) ? Round(s) : 0
 
@@ -1927,7 +2287,7 @@ Sanity() {
             i--
         }
     }
-    for m in [G.minimized, G.placed, G.planOf, G.borders, G.animPos] {
+    for m in [G.minimized, G.placed, G.planOf, G.borders, G.animPos, G.launch] {
         gone := []
         for h in m
             if !DllCall("IsWindow", "ptr", h)
