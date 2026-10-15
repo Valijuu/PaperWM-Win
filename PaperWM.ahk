@@ -270,6 +270,7 @@ OnMessage(0x21, PeekMouseActivate)                          ; WM_MOUSEACTIVATE: 
 OnMessage(0x201, PeekClick)                                 ; WM_LBUTTONDOWN auf einer Vorschau
 OnMessage(0x204, IndicatorRightClick)                       ; WM_RBUTTONDOWN: Menü der Workspace-Anzeige
 OnMessage(0x200, IndicatorHover)                            ; WM_MOUSEMOVE: Tooltips der Anzeige
+OnMessage(0x200, OverviewHover)                             ; WM_MOUSEMOVE: Schaltflächen der Übersicht
 SetTimer(Sanity, 2000)
 SetTimer(PeriodicSave, 60000)                               ; zusätzlich regelmäßig speichern (Titel aktuell halten)
 OnExit(Cleanup)
@@ -2635,15 +2636,14 @@ OverviewOpen(mi := 0) {
     for b in [["Sitzung speichern", "save", 0xE74E, 210], ["Sitzung laden ▾", "load", 0xE8B7, 190]
         , ["Hilfe", "help", 0xE897, 120]] {
         bw := Round(b[4] * sc), primary := A_Index = 1
-        bg := primary ? accent : "2E2E2E", fc := primary ? "101010" : "FFFFFF"
-        host.SetFont("s13 c" fc, ICON_FONT)
-        host.Add("Text", Format("x{} y{} w{} h{} Center 0x200 Background{}", bx, pad, bh, bh, bg), Chr(b[3]))
-        host.SetFont("s11 c" fc, "Segoe UI")
-        host.Add("Text", Format("x{} y{} w{} h{} 0x200 Background{}", bx + bh, pad, bw - bh, bh, bg), b[1])
-        OV.buttons.Push({x: bx, y: pad, w: bw, h: bh, act: b[2]})
+        bg := primary ? accent : "2E2E2E", hov := primary ? Brighten(accent, 0.8) : "3E3E3E"
+        fc := primary ? 0xFF101010 : 0xFFFFFFFF
+        bmp := ButtonBitmap(bw, bh, bg, fc, Chr(b[3]), b[1], sc)
+        hot := ButtonBitmap(bw, bh, hov, fc, Chr(b[3]), b[1], sc)
+        pic := host.Add("Picture", Format("x{} y{} w{} h{}", bx, pad, bw, bh), "HBITMAP:*" bmp)
+        OV.buttons.Push({x: bx, y: pad, w: bw, h: bh, act: b[2], pic: pic, bmp: bmp, hotBmp: hot, hot: false})
         bx += bw + gap
     }
-    host.SetFont("s11 cC8C8C8", "Segoe UI")
     weights := [], total := 0
     for sp in SPACES
         weights.Push(sp.cols.Length ? 1 : 0.3), total += weights[weights.Length]
@@ -2829,6 +2829,61 @@ OverviewButton(act) {
     }
 }
 
+; Schaltfläche als Bild: abgerundetes Rechteck mit Symbol und Beschriftung, geglättet mit
+; GDI+ auf dem Hintergrund der Übersicht (bg: RRGGBB, fg: ARGB)
+ButtonBitmap(w, h, bg, fg, glyph, label, sc) {
+    GdipInit()
+    hdc := DllCall("CreateCompatibleDC", "ptr", 0, "ptr")
+    bi := Buffer(40, 0)
+    NumPut("uint", 40, "int", w, "int", -h, "ushort", 1, "ushort", 32, bi)
+    bits := 0, gr := 0
+    hbm := DllCall("CreateDIBSection", "ptr", hdc, "ptr", bi, "uint", 0, "ptr*", &bits, "ptr", 0, "uint", 0, "ptr")
+    obm := DllCall("SelectObject", "ptr", hdc, "ptr", hbm, "ptr")
+    DllCall("gdiplus\GdipCreateFromHDC", "ptr", hdc, "ptr*", &gr)
+    DllCall("gdiplus\GdipSetSmoothingMode", "ptr", gr, "int", 4)
+    DllCall("gdiplus\GdipGraphicsClear", "ptr", gr, "uint", 0xFF161616)     ; Hintergrund der Übersicht
+    GdipRoundRect(gr, 0xFF000000 | Integer("0x" bg), 0, 0, w - 1, h - 1, Round(8 * sc))
+    ipx := 15 * sc, gw := GdipText(0, glyph, ipx, , , , , , ICON_FONT), px := Round(12 * sc)
+    GdipText(gr, glyph, ipx, fg, px, 0, gw + 2, h, ICON_FONT)
+    GdipText(gr, label, 14.5 * sc, fg, px + gw + Round(9 * sc), 0, w, h)
+    DllCall("gdiplus\GdipDeleteGraphics", "ptr", gr)
+    DllCall("SelectObject", "ptr", hdc, "ptr", obm)
+    DllCall("DeleteDC", "ptr", hdc)
+    return hbm
+}
+
+; Gefülltes Rechteck mit runden Ecken (Radius r)
+GdipRoundRect(gr, argb, x, y, w, h, r) {
+    br := 0, path := 0, d := 2 * r
+    DllCall("gdiplus\GdipCreateSolidFill", "uint", argb, "ptr*", &br)
+    DllCall("gdiplus\GdipCreatePath", "int", 0, "ptr*", &path)
+    DllCall("gdiplus\GdipAddPathArc", "ptr", path, "float", x, "float", y, "float", d, "float", d, "float", 180, "float", 90)
+    DllCall("gdiplus\GdipAddPathArc", "ptr", path, "float", x + w - d, "float", y, "float", d, "float", d, "float", 270, "float", 90)
+    DllCall("gdiplus\GdipAddPathArc", "ptr", path, "float", x + w - d, "float", y + h - d, "float", d, "float", d, "float", 0, "float", 90)
+    DllCall("gdiplus\GdipAddPathArc", "ptr", path, "float", x, "float", y + h - d, "float", d, "float", d, "float", 90, "float", 90)
+    DllCall("gdiplus\GdipClosePathFigure", "ptr", path)
+    DllCall("gdiplus\GdipFillPath", "ptr", gr, "ptr", br, "ptr", path)
+    DllCall("gdiplus\GdipDeletePath", "ptr", path)
+    DllCall("gdiplus\GdipDeleteBrush", "ptr", br)
+}
+
+FreeButtonBitmaps(buttons) {
+    for b in buttons
+        DllCall("DeleteObject", "ptr", b.bmp), DllCall("DeleteObject", "ptr", b.hotBmp)
+}
+
+; Maus über einer Schaltfläche der Übersicht: hellere Variante zeigen
+OverviewHover(wParam, lParam, msg, hwnd) {
+    if !OV.active || !OV.gui || hwnd != OV.gui.Hwnd
+        return
+    x := lParam << 48 >> 48, y := lParam << 32 >> 48
+    for b in OV.buttons {
+        inside := x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h
+        if inside != b.hot
+            b.hot := inside, b.pic.Value := "HBITMAP:*" (inside ? b.hotBmp : b.bmp)
+    }
+}
+
 ; Hilfefenster unter der Schaltfläche „Hilfe“ ein-/ausblenden. Eigenes Fenster über der
 ; Übersicht, weil deren Live-Vorschauen sonst darüber gezeichnet würden.
 OverviewHelp(b := 0) {
@@ -2870,6 +2925,8 @@ OverviewHelp(b := 0) {
         host.Add("Text", Format("x+0 yp w{} h{} 0x200", dw, lh), k[2])
     }
     x := m.ml + (b ? b.x : OV.pad), y := m.mt + (b ? b.y + b.h + Round(8 * sc) : OV.pad)
+    corner := 2                                     ; Windows 11: runde Ecken (DWMWCP_ROUND)
+    DllCall("dwmapi\DwmSetWindowAttribute", "ptr", host.Hwnd, "uint", 33, "int*", &corner, "uint", 4)
     host.Show(Format("x{} y{} NoActivate AutoSize", x, y))
     OV.help := host
 }
@@ -2956,6 +3013,8 @@ OverviewClose(keepKeys := false) {
     if OV.help
         try OV.help.Destroy()
     OV.help := 0
+    buttons := OV.buttons, OV.buttons := []          ; Bilder der Schaltflächen nach dem Fenster freigeben
+    SetTimer(() => FreeButtonBitmaps(buttons), -1)
     for e in OV.thumbs
         DllCall("dwmapi\DwmUnregisterThumbnail", "ptr", e.t)
     OV.thumbs := [], OV.ctrls := [], OV.frame := []
