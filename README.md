@@ -121,6 +121,7 @@ At the top left are the buttons **Sitzung speichern** (save session), **Sitzung 
 
 Because tapping Windows opens the overview, the Start menu is available via **Ctrl+Esc** or the Windows icon in the taskbar. If you prefer the Start menu as usual: `OVERVIEW_ON_TAP := false` (see "Settings").
 
+
 ## Shortcuts: scratch layer, Alt-Tab and mouse
 
 The scratch layer keeps floating windows outside the strip, such as a calculator or notes.
