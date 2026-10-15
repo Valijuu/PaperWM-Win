@@ -38,16 +38,17 @@ To turn it off: `Unregister-ScheduledTask PaperWM` (also as administrator).
 | `PaperWM.layout` | Saved workspace layout, created on first start |
 | `PaperWM.log` | Error log and start time |
 | `Sessions` | Saved sessions (see "Sessions") |
-| `Sessions` | Saved sessions (see "Sessions") |
+| `PaperWM.last` | State at the last shutdown ("Letzte Sitzung", last session) |
 
-## Turning it off
+## Tray menu and turning it off
 
-Right-click the green "H" in the notification area of the taskbar.
+Right-click the green "H" in the notification area of the taskbar (bottom right, next to the clock):
 
 | Menu item | Effect |
 | --- | --- |
 | Pausieren / Fortsetzen (pause / resume) | Turns tiling and shortcuts off, Windows behaves normally again. Hidden windows are brought to the left monitor. A second click turns PaperWM back on and restores the layout. |
 | Alle Fenster zurückholen (bring back all windows) | Brings all hidden windows visibly to the left monitor. PaperWM keeps running. |
+| Sitzung speichern / laden / löschen (save / load / delete session) | See "Sessions". This is easier via the workspace indicator at the top left or the overview. |
 | Neu laden (reload) | Restarts the script, for example after changing the settings. |
 | Beenden (exit) | Exits PaperWM until the next start. The layout is saved first, hidden windows are brought back. |
 
@@ -89,7 +90,7 @@ Each monitor shows one workspace. As in GNOME, workspaces come and go on their o
 
 | Key | Effect |
 | --- | --- |
-| Tap Windows | Overview as in GNOME: all workspaces stacked, with large live previews of the windows. All rows are the same size. If not all workspaces fit on the screen, or a workspace is wider than the screen, the overview scrolls along with the selection as in niri. Arrow keys, Tab or the mouse wheel select a window or an empty workspace, Enter or a click jumps there, Esc or another tap closes it. At the top left are the buttons "Sitzung speichern" (save session), "Sitzung laden" (load session) and "Hilfe" (help). The help (also F1) lists all keys of the overview. If you type text instead, you land in Windows search with that text. For this, tapping Windows no longer opens the Start menu; use Ctrl+Esc or the Windows icon in the taskbar instead. |
+| Tap Windows | Open / close the overview (see "Overview") |
 | Windows+Page↓ / Windows+Page↑ | Next / previous workspace |
 | Windows+F2 | Rename the current workspace (in the overview: F2 for the selected one). An empty name restores "Workspace n". |
 | Windows+Ctrl+Page↓ / Windows+Ctrl+Page↑ | Take the active window to the next / previous workspace |
@@ -101,6 +102,24 @@ Each monitor shows one workspace. As in GNOME, workspaces come and go on their o
 | Windows+Shift+Ctrl+← / → / ↑ / ↓ | Move the active window to the monitor in that direction |
 | Windows+Alt+← / → / ↑ / ↓ | Swap workspaces with the monitor in that direction |
 | Ctrl+Alt+Shift+← / → / ↑ / ↓ | Move the active workspace to the monitor in that direction |
+
+## Overview
+
+A short tap on Windows (or a click on the workspace indicator at the top left) opens an overview as in GNOME: all workspaces stacked, with large live previews of the windows, all rows the same size. If not all workspaces fit on the screen, or a workspace is wider than the screen, the overview scrolls along with the selection as in niri.
+
+At the top left are the buttons **Sitzung speichern** (save session), **Sitzung laden ▾** (load session) and **Hilfe** (help). The help shows all keys of the overview.
+
+| Key | Effect |
+| --- | --- |
+| ← → ↑ ↓, Tab, mouse wheel | Select a window or workspace (including empty workspaces) |
+| Enter or click | Jump to the selected window or workspace |
+| Esc or tap Windows | Close the overview |
+| Type text | Open Windows search with that text, as in GNOME |
+| F2 | Rename the selected workspace |
+| Ctrl+S | Save a session (only while the overview is open; otherwise Ctrl+S goes to your programs as usual) |
+| F1 | Show / hide the help |
+
+Because tapping Windows opens the overview, the Start menu is available via **Ctrl+Esc** or the Windows icon in the taskbar. If you prefer the Start menu as usual: `OVERVIEW_ON_TAP := false` (see "Settings").
 
 ## Shortcuts: scratch layer, Alt-Tab and mouse
 
@@ -122,6 +141,8 @@ The scratch layer keeps floating windows outside the strip, such as a calculator
 - Drag a window to the other monitor: it moves into that monitor's workspace.
 - Click a taskbar icon: brings the window into view, even from another workspace.
 - Click the preview of a cut-off window at the monitor edge: brings the window into view.
+- Workspace indicator at the top left: clicking the dots or the name opens the overview, 💾 saves a session, ✎ or right-click opens the menu (rename, load / delete session).
+- In the overview: clicking a preview jumps to that window.
 
 ## Sessions
 
@@ -168,7 +189,7 @@ All settings are at the top of `PaperWM.ahk`. After a change, choose "Neu laden"
   - Chrome, Edge, VS Code, Teams and other Chromium/Electron apps don't draw while they are invisible. Their edge preview therefore shows the last frame until they are scrolled into view.
   - The colored frame around the active window is cut off at the monitor boundary.
 - **Different monitors:** gaps and step sizes are converted using each monitor's scaling, and column widths are stored as a fraction of the monitor width. When a workspace moves to a larger or smaller monitor, the proportions stay the same.
-- **Highlight:** a frame in the Windows accent color surrounds the active window, in the gap between windows as in PaperWM.
+- **Highlight:** a frame in the Windows accent color surrounds the active window, in the gap between windows as in PaperWM. If the accent color is too dark to stand out on a dark wallpaper, it is brightened automatically.
 - **Saved layout:** workspaces, columns, widths, heights, the monitor-to-workspace assignment and the settings are stored in `PaperWM.layout`. It is saved shortly after every change, every minute and on exit.
   - After restarting PaperWM, windows are recognized by their handle, which is reliable.
   - After restarting Windows, they are recognized by program and window title, falling back to program and window class. This is only as good as the titles stay the same.

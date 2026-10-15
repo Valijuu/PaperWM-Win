@@ -38,16 +38,17 @@ Zum Abschalten: `Unregister-ScheduledTask PaperWM` (ebenfalls als Administrator)
 | `PaperWM.layout` | Gespeicherte Aufteilung der Workspaces, wird beim ersten Start angelegt |
 | `PaperWM.log` | Fehlerprotokoll und Startzeit |
 | `Sessions` | Gespeicherte Sitzungen (siehe „Sitzungen“) |
-| `Sessions` | Gespeicherte Sitzungen (siehe „Sitzungen“) |
+| `PaperWM.last` | Stand beim letzten Herunterfahren („Letzte Sitzung“) |
 
-## Ausschalten
+## Tray-Menü und Ausschalten
 
-Ausgeschaltet wird über einen Rechtsklick auf das grüne „H“ im Infobereich der Taskleiste.
+Rechtsklick auf das grüne „H“ im Infobereich der Taskleiste (unten rechts bei der Uhr):
 
 | Menüpunkt | Wirkung |
 | --- | --- |
 | Pausieren / Fortsetzen | Schaltet Kacheln und Tastenkürzel ab, Windows verhält sich wieder normal. Versteckte Fenster werden auf den linken Monitor geholt. Ein zweiter Klick schaltet PaperWM wieder ein und stellt die Aufteilung wieder her. |
 | Alle Fenster zurückholen | Holt alle versteckten Fenster sichtbar auf den linken Monitor. PaperWM läuft weiter. |
+| Sitzung speichern / laden / löschen | Siehe „Sitzungen“. Bequemer geht das über die Workspace-Anzeige oben links oder die Übersicht. |
 | Neu laden | Startet das Skript neu, z. B. nach einer Änderung der Einstellungen. |
 | Beenden | Beendet PaperWM bis zum nächsten Start. Die Aufteilung wird vorher gespeichert, versteckte Fenster werden zurückgeholt. |
 
@@ -89,7 +90,7 @@ Jeder Monitor zeigt einen Workspace. Wie bei GNOME entstehen und verschwinden Wo
 
 | Taste | Wirkung |
 | --- | --- |
-| Windows tippen | Übersicht wie bei GNOME: alle Workspaces untereinander mit großen Live-Vorschauen der Fenster. Alle Zeilen sind gleich groß. Passen nicht alle Workspaces auf den Bildschirm oder ist ein Workspace breiter als der Bildschirm, scrollt die Übersicht wie bei niri mit der Auswahl mit. Pfeiltasten, Tab oder das Mausrad wählen ein Fenster oder einen leeren Workspace, Enter oder ein Klick springt hin, Esc oder erneutes Tippen schließt. Oben links stehen die Schaltflächen „Sitzung speichern“, „Sitzung laden“ und „Hilfe“. Die Hilfe (auch F1) listet alle Tasten der Übersicht. Wer stattdessen Text tippt, landet mit diesem Text in der Windows-Suche. Das Startmenü öffnet sich dafür nicht mehr beim Tippen auf Windows, sondern über Strg+Esc oder das Windows-Symbol in der Taskleiste. |
+| Windows tippen | Übersicht öffnen / schließen (siehe „Übersicht“) |
 | Windows+Bild↓ / Windows+Bild↑ | Nächster / vorheriger Workspace |
 | Windows+F2 | Aktuellen Workspace umbenennen (in der Übersicht: F2 für den ausgewählten). Leerer Name = wieder „Workspace n“. |
 | Windows+Strg+Bild↓ / Windows+Strg+Bild↑ | Aktives Fenster in den nächsten / vorherigen Workspace mitnehmen |
@@ -101,6 +102,24 @@ Jeder Monitor zeigt einen Workspace. Wie bei GNOME entstehen und verschwinden Wo
 | Windows+Shift+Strg+← / → / ↑ / ↓ | Aktives Fenster auf den Monitor in dieser Richtung schieben |
 | Windows+Alt+← / → / ↑ / ↓ | Workspaces mit dem Monitor in dieser Richtung tauschen |
 | Strg+Alt+Shift+← / → / ↑ / ↓ | Aktiven Workspace auf den Monitor in dieser Richtung schieben |
+
+## Übersicht
+
+Einmal kurz auf Windows tippen (oder auf die Workspace-Anzeige oben links klicken) öffnet wie bei GNOME eine Übersicht: alle Workspaces untereinander mit großen Live-Vorschauen der Fenster, alle Zeilen gleich groß. Passen nicht alle Workspaces auf den Bildschirm oder ist ein Workspace breiter als der Bildschirm, scrollt die Übersicht wie bei niri mit der Auswahl mit.
+
+Oben links stehen die Schaltflächen **Sitzung speichern**, **Sitzung laden ▾** und **Hilfe**. Die Hilfe zeigt alle Tasten der Übersicht.
+
+| Taste | Wirkung |
+| --- | --- |
+| ← → ↑ ↓, Tab, Mausrad | Fenster oder Workspace auswählen (auch leere Workspaces) |
+| Enter oder Klick | Zum ausgewählten Fenster bzw. Workspace springen |
+| Esc oder Windows tippen | Übersicht schließen |
+| Text tippen | Windows-Suche mit diesem Text öffnen, wie bei GNOME |
+| F2 | Ausgewählten Workspace umbenennen |
+| Strg+S | Sitzung speichern (nur solange die Übersicht offen ist, sonst geht Strg+S ganz normal an deine Programme) |
+| F1 | Hilfe ein- / ausblenden |
+
+Weil das Tippen auf Windows die Übersicht öffnet, kommt das Startmenü über **Strg+Esc** oder das Windows-Symbol in der Taskleiste. Wer das Startmenü lieber wie gewohnt hätte: `OVERVIEW_ON_TAP := false` (siehe „Einstellungen“).
 
 ## Tastenkürzel: Scratch-Layer, Alt-Tab und Maus
 
@@ -122,6 +141,8 @@ Der Scratch-Layer hält schwebende Fenster außerhalb des Streifens, etwa einen 
 - Fenster auf den anderen Monitor ziehen: Es wandert in dessen Workspace.
 - Klick auf ein Taskleisten-Symbol: Holt das Fenster in den Blick, auch von einem anderen Workspace.
 - Klick auf die Vorschau eines angeschnittenen Fensters am Monitorrand: Holt das Fenster in den Blick.
+- Workspace-Anzeige oben links: Klick auf Punkte oder Namen öffnet die Übersicht, 💾 speichert eine Sitzung, ✎ oder Rechtsklick öffnet das Menü (umbenennen, Sitzung laden / löschen).
+- In der Übersicht: Klick auf eine Vorschau springt zu diesem Fenster.
 
 ## Sitzungen
 
@@ -168,7 +189,7 @@ Alle Einstellungen stehen am Anfang von `PaperWM.ahk`. Nach einer Änderung im T
   - Chrome, Edge, VS Code, Teams und andere Chromium/Electron-Apps zeichnen nicht, solange sie unsichtbar sind. Ihre Vorschau am Rand zeigt deshalb das letzte Bild, bis sie hereingescrollt werden.
   - Der farbige Rahmen um das aktive Fenster wird an der Monitorgrenze abgeschnitten.
 - **Unterschiedliche Monitore:** Abstände und Schrittweiten werden mit der Skalierung des jeweiligen Monitors umgerechnet, Spaltenbreiten als Anteil der Monitorbreite gespeichert. Zieht ein Workspace auf einen größeren oder kleineren Monitor um, bleiben die Proportionen gleich.
-- **Hervorhebung:** Um das aktive Fenster liegt ein Rahmen in der Windows-Akzentfarbe, wie bei PaperWM im Abstand zwischen den Fenstern.
+- **Hervorhebung:** Um das aktive Fenster liegt ein Rahmen in der Windows-Akzentfarbe, wie bei PaperWM im Abstand zwischen den Fenstern. Ist die Akzentfarbe zu dunkel, um auf einem dunklen Hintergrundbild aufzufallen, wird sie automatisch aufgehellt.
 - **Gespeicherte Aufteilung:** Workspaces, Spalten, Breiten, Höhen, die Zuordnung von Monitor zu Workspace und die Einstellungen landen in `PaperWM.layout`. Gespeichert wird kurz nach jeder Änderung, jede Minute und beim Beenden.
   - Nach einem Neustart von PaperWM werden Fenster über ihr Handle wiedererkannt, das klappt zuverlässig.
   - Nach einem Neustart von Windows werden sie über Programm und Fenstertitel erkannt, ersatzweise über Programm und Fensterklasse. Das ist nur so gut, wie die Titel gleich bleiben.
