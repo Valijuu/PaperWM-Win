@@ -87,7 +87,7 @@ Each monitor shows one workspace. As in GNOME, workspaces come and go on their o
 
 | Key | Effect |
 | --- | --- |
-| Tap Windows | Overview as in GNOME: all workspaces stacked, with large live previews of the windows. If they don't all fit on the screen, it scrolls along with the selection as in niri. Arrow keys, Tab or the mouse wheel select a window or an empty workspace, Enter or a click jumps there, Esc or another tap closes it. If you type text instead, you land in Windows search with that text. For this, tapping Windows no longer opens the Start menu; use Ctrl+Esc or the Windows icon in the taskbar instead. |
+| Tap Windows | Overview as in GNOME: all workspaces stacked, with large live previews of the windows. All rows are the same size. If not all workspaces fit on the screen, or a workspace is wider than the screen, the overview scrolls along with the selection as in niri. Arrow keys, Tab or the mouse wheel select a window or an empty workspace, Enter or a click jumps there, Esc or another tap closes it. If you type text instead, you land in Windows search with that text. For this, tapping Windows no longer opens the Start menu; use Ctrl+Esc or the Windows icon in the taskbar instead. |
 | Windows+Page↓ / Windows+Page↑ | Next / previous workspace |
 | Windows+Ctrl+Page↓ / Windows+Ctrl+Page↑ | Take the active window to the next / previous workspace |
 | Windows+^ | Go to the most recently used workspace. Holding Windows and pressing ^ repeatedly goes further back. |

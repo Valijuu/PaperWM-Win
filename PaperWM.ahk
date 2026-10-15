@@ -155,7 +155,7 @@ global G := {active: 0, scratch: [], q: [], openPos: "right", focusCenter: false
 global NAV := {active: false, kind: "", list: [], idx: 1, mon: 0, hwnd: 0}
 global HL := {gui: 0, key: "", region: "", dwm: 0, cref: 0}
 global OV := {active: false, opened: 0, down: 0, clean: false, ih: 0, kh: 0, searching: 0, buf: ""
-    , ctrls: [], rows: [], scroll: 0, scrollAnim: 0, pad: 0, viewH: 0, contentH: 0, gui: 0, thumbs: [], items: [], sel: 0, mon: 1, frame: []}
+    , ctrls: [], rows: [], scroll: 0, scrollAnim: 0, pad: 0, viewW: 0, viewH: 0, contentH: 0, gui: 0, thumbs: [], items: [], sel: 0, mon: 1, frame: []}
 global IND := Map()        ; Monitor → Workspace-Anzeige {gui, key}
 
 global ACTIONS := Map(
@@ -2116,8 +2116,11 @@ SearchFlush() {
 
 ; mi: Monitor, auf dem die Übersicht erscheint (0 = aktueller)
 ; Wie bei niri: Belegte Workspaces bekommen eine große, feste Zeilenhöhe (etwa zwei passen
-; auf den Bildschirm), leere nur eine schmale. Passt nicht alles, scrollt die Übersicht
-; mit der Auswahl mit. Alle Positionen sind Inhaltskoordinaten, OV.scroll verschiebt sie.
+; auf den Bildschirm), leere nur eine schmale. Jede Zeile füllt ihre Höhe, ein breiter
+; Streifen ragt dafür seitlich hinaus und zeigt zunächst den Ausschnitt, der auch auf dem
+; Monitor zu sehen ist. Die Auswahl scrollt die Übersicht senkrecht und ihre Zeile
+; waagerecht mit. Positionen sind Inhaltskoordinaten: angezeigt wird x - xoff der Zeile
+; und y - OV.scroll.
 OverviewOpen(mi := 0) {
     mi := mi || CurMonIdx(), m := MONS[mi], sc := m.scale
     mw := m.mr - m.ml, mh := m.mb - m.mt
@@ -2131,16 +2134,17 @@ OverviewOpen(mi := 0) {
     free := mh - 2 * pad - (SPACES.Length - 1) * rowGap
     unit := Max(free / total, (mh - 2 * pad - rowGap) / 2.25)   ; Höhe einer belegten Zeile
     fg := DllCall("GetForegroundWindow", "ptr"), items := [], thumbs := [], ctrls := [], rows := []
-    sel := 0, top := pad
+    sel := 0, top := pad, availW := mw - 2 * pad
     for row, sp in SPACES {
         rowH := unit * weights[row]
-        rows.Push({top: Round(top), bottom: Round(top + rowH)})
+        rw := {top: Round(top), bottom: Round(top + rowH), xoff: 0, maxOff: 0}
+        rows.Push(rw)
         sm := SpaceMon(sp), rects := StripRects(sp, sm)
         label := "Workspace " sp.idx (rects.Length ? "" : "  (leer)")
-        c := host.Add("Text", Format("x{} y{} w{} h{} BackgroundTrans{}", pad, Round(top), mw - 2 * pad, labH
+        c := host.Add("Text", Format("x{} y{} w{} h{} BackgroundTrans{}", pad, Round(top), availW, labH
             , sp = G.active ? " cFFFFFF" : ""), label)
-        ctrls.Push({c: c, x: pad, y: Round(top), w: mw - 2 * pad, h: labH})
-        y0 := Round(top + labH), availH := rowH - labH, availW := mw - 2 * pad
+        ctrls.Push({c: c, x: pad, y: Round(top), w: availW, h: labH})
+        y0 := Round(top + labH), availH := rowH - labH
         top += rowH + rowGap
         if !rects.Length {                     ; leerer Workspace: Platzhalter zum Auswählen
             hh := Round(availH), w := Round(hh * (sm.mr - sm.ml) / (sm.mb - sm.mt))
@@ -2151,16 +2155,19 @@ OverviewOpen(mi := 0) {
                 sel := items.Length
             continue
         }
-        ; nur den Bereich mit Fenstern abbilden (ohne die Ränder oben und unten)
-        yMin := rects[1].y, yMax := 0
+        ; Maßstab: Fensterbereich (ohne Ränder oben/unten) füllt die Zeilenhöhe, das
+        ; breiteste einzelne Fenster passt noch ganz hinein
+        yMin := rects[1].y, yMax := 0, wMax := 0
         for r in rects
-            yMin := Min(yMin, r.y), yMax := Max(yMax, r.y + r.h)
-        s := Min(availH / (yMax - yMin), availW / rects.width)
+            yMin := Min(yMin, r.y), yMax := Max(yMax, r.y + r.h), wMax := Max(wMax, r.w)
+        s := Min(availH / (yMax - yMin), availW / wMax)
+        rw.maxOff := Max(0, Round(rects.width * s) - availW)
+        rw.xoff := Clamp(Round(sp.scrollX * s), 0, rw.maxOff)  ; Ausschnitt wie auf dem Monitor
         for r in rects {
             x := pad + Round(r.x * s), y := y0 + Round((r.y - yMin) * s), w := Round(r.w * s), hh := Round(r.h * s)
             thumb := 0
             if DllCall("dwmapi\DwmRegisterThumbnail", "ptr", host.Hwnd, "ptr", r.hwnd, "ptr*", &thumb) = 0
-                thumbs.Push({t: thumb, x: x, y: y, w: w, h: hh})
+                thumbs.Push({t: thumb, row: row, x: x, y: y, w: w, h: hh})
             items.Push({h: r.hwnd, sp: sp, row: row, x: x, y: y, w: w, hh: hh})
             if r.hwnd = fg
                 sel := items.Length
@@ -2171,7 +2178,7 @@ OverviewOpen(mi := 0) {
     loop 4
         OV.frame.Push(host.Add("Text", "x0 y0 w0 h0 Background" OverviewColor()))
     OV.active := true, OV.gui := host, OV.thumbs := thumbs, OV.ctrls := ctrls, OV.items := items
-    OV.rows := rows, OV.mon := mi, OV.pad := pad, OV.viewH := mh
+    OV.rows := rows, OV.mon := mi, OV.pad := pad, OV.viewW := mw, OV.viewH := mh
     OV.contentH := Round(top - rowGap + pad), OV.scroll := 0, OV.opened := A_TickCount
     ; Text abfangen (nicht an die App weitergeben) → Windows-Suche. Pfeile, Enter, Tab und
     ; Esc sind Hotkeys und haben Vorrang.
@@ -2180,30 +2187,38 @@ OverviewOpen(mi := 0) {
     kh.Start()
     OV.kh := kh
     OV.sel := sel || 1
-    OverviewPlace(0)                           ; Vorschauen erstmals platzieren
+    OverviewPlace()                            ; Vorschauen erstmals platzieren
     OverviewSelect(OV.sel, false)
     HideHighlight()
     host.Show(Format("x{} y{} w{} h{} NoActivate", m.ml, m.mt, mw, mh))
 }
 
-; Auswahl setzen und die Zeile in den sichtbaren Bereich scrollen (animate: weich)
+; Auswahl setzen und sie senkrecht wie waagerecht in den sichtbaren Bereich scrollen
 OverviewSelect(i, animate := true) {
     OV.sel := i
-    rw := OV.rows[OV.items[i].row], to := OV.scroll
-    if rw.top - OV.pad < to
-        to := rw.top - OV.pad
-    else if rw.bottom + OV.pad > to + OV.viewH
-        to := rw.bottom + OV.pad - OV.viewH
+    it := OV.items[i], rw := OV.rows[it.row], pad := OV.pad
+    to := OV.scroll
+    if rw.top - pad < to
+        to := rw.top - pad
+    else if rw.bottom + pad > to + OV.viewH
+        to := rw.bottom + pad - OV.viewH
     to := Clamp(to, 0, Max(0, OV.contentH - OV.viewH))
-    if to = OV.scroll {
+    xto := rw.xoff
+    if it.x - xto < pad
+        xto := it.x - pad
+    else if it.x + it.w - xto > OV.viewW - pad
+        xto := it.x + it.w - (OV.viewW - pad)
+    xto := Clamp(xto, 0, rw.maxOff)
+    if to = OV.scroll && xto = rw.xoff {
         OverviewFrame()
         return
     }
     if !animate || ANIM_MS <= 0 {
-        OverviewPlace(to)
+        OV.scroll := to, rw.xoff := xto
+        OverviewPlace()
         return
     }
-    OV.scrollAnim := {from: OV.scroll, to: to, start: A_TickCount}
+    OV.scrollAnim := {start: A_TickCount, from: OV.scroll, to: to, rw: rw, xfrom: rw.xoff, xto: xto}
     SetTimer(OverviewScrollTick, 10)
     OverviewScrollTick()
 }
@@ -2213,20 +2228,22 @@ OverviewScrollTick() {
         SetTimer(OverviewScrollTick, 0)
         return
     }
-    a := OV.scrollAnim, t := Min(1, (A_TickCount - a.start) / ANIM_MS)
-    OverviewPlace(Round(a.from + (a.to - a.from) * (1 - (1 - t) ** 3)))
+    a := OV.scrollAnim, t := Min(1, (A_TickCount - a.start) / ANIM_MS), e := 1 - (1 - t) ** 3
+    OV.scroll := Round(a.from + (a.to - a.from) * e)
+    a.rw.xoff := Round(a.xfrom + (a.xto - a.xfrom) * e)
+    OverviewPlace()
     if t >= 1
         OV.scrollAnim := 0, SetTimer(OverviewScrollTick, 0)
 }
 
-; Alles um scroll nach oben verschoben anordnen
-OverviewPlace(scroll) {
-    OV.scroll := scroll
+; Alles nach OV.scroll und den waagerechten Verschiebungen der Zeilen anordnen
+OverviewPlace() {
     for e in OV.ctrls
-        e.c.Move(e.x, e.y - scroll, e.w, e.h)
-    for e in OV.thumbs
-        DllCall("dwmapi\DwmUpdateThumbnailProperties", "ptr", e.t
-            , "ptr", ThumbProps([e.x, e.y - scroll, e.x + e.w, e.y - scroll + e.h]))
+        e.c.Move(e.x, e.y - OV.scroll, e.w, e.h)
+    for e in OV.thumbs {
+        x := e.x - OV.rows[e.row].xoff, y := e.y - OV.scroll
+        DllCall("dwmapi\DwmUpdateThumbnailProperties", "ptr", e.t, "ptr", ThumbProps([x, y, x + e.w, y + e.h]))
+    }
     OverviewFrame()
 }
 
@@ -2234,7 +2251,8 @@ OverviewPlace(scroll) {
 OverviewFrame() {
     it := OV.items[OV.sel], sc := MONS[OV.mon].scale
     t := Max(2, Round(3 * sc)), d := Max(1, Round(2 * sc))          ; Stärke, Abstand
-    l := it.x - d - t, tp := it.y - OV.scroll - d - t, fw := it.w + 2 * (d + t), fh := it.hh + 2 * (d + t)
+    l := it.x - OV.rows[it.row].xoff - d - t, tp := it.y - OV.scroll - d - t
+    fw := it.w + 2 * (d + t), fh := it.hh + 2 * (d + t)
     OV.frame[1].Move(l, tp, fw, t)
     OV.frame[2].Move(l, tp + fh - t, fw, t)
     OV.frame[3].Move(l, tp, t, fh)
@@ -2257,7 +2275,8 @@ OverviewKey(hk) {
     }
 }
 
-; dx: vorheriges/nächstes Element derselben Zeile, dy: Zeile wechseln (nächstgelegenes Element)
+; dx: vorheriges/nächstes Element derselben Zeile, dy: Zeile wechseln (das Element, das
+; auf dem Bildschirm am nächsten darunter/darüber liegt)
 OverviewMove(dx, dy) {
     cur := OV.items[OV.sel]
     if dx {
@@ -2266,10 +2285,13 @@ OverviewMove(dx, dy) {
             OverviewSelect(j)
         return
     }
-    row := cur.row + dy, best := 0, bestD := 0, cx := cur.x + cur.w / 2
+    row := cur.row + dy, best := 0, bestD := 0
+    cx := cur.x - OV.rows[cur.row].xoff + cur.w / 2
     for i, it in OV.items {
-        dist := Abs(it.x + it.w / 2 - cx)
-        if it.row = row && (!best || dist < bestD)
+        if it.row != row
+            continue
+        dist := Abs(it.x - OV.rows[row].xoff + it.w / 2 - cx)
+        if !best || dist < bestD
             best := i, bestD := dist
     }
     if best
@@ -2288,11 +2310,13 @@ DebugOverview(wParam, *) {
 
 OverviewClick(x, y) {
     y += OV.scroll                             ; Bildschirm → Inhaltskoordinaten
-    for i, it in OV.items
-        if x >= it.x && x < it.x + it.w && y >= it.y && y < it.y + it.hh {
+    for i, it in OV.items {
+        cx := x + OV.rows[it.row].xoff
+        if cx >= it.x && cx < it.x + it.w && y >= it.y && y < it.y + it.hh {
             SetTimer(OverviewApply.Bind(i), -1)
             return
         }
+    }
 }
 
 OverviewApply(i) {
