@@ -1182,13 +1182,13 @@ GdipPill(gr, argb, x, y, w, h) {
 
 ; Text in Segoe UI (Größe px), senkrecht zentriert im Rechteck x/y/w/h. Ohne gr wird nur
 ; gemessen. Gibt die Breite des Texts zurück.
-GdipText(gr, text, px, argb := 0, x := 0, y := 0, w := 0, h := 0, fontName := "Segoe UI") {
+GdipText(gr, text, px, argb := 0, x := 0, y := 0, w := 0, h := 0, fontName := "Segoe UI", hint := 3) {
     fam := 0, font := 0, fmt := 0, br := 0, tmpDC := 0, own := !gr
     if own {                                                  ; Messen: Hilfs-Grafik
         tmpDC := DllCall("CreateCompatibleDC", "ptr", 0, "ptr")
         DllCall("gdiplus\GdipCreateFromHDC", "ptr", tmpDC, "ptr*", &gr)
     }
-    DllCall("gdiplus\GdipSetTextRenderingHint", "ptr", gr, "int", 3)  ; AntiAliasGridFit: scharf, funktioniert mit Transparenz
+    DllCall("gdiplus\GdipSetTextRenderingHint", "ptr", gr, "int", hint)  ; 3 = AntiAliasGridFit (mit Transparenz), 5 = ClearType (deckend)
     DllCall("gdiplus\GdipCreateFontFamilyFromName", "wstr", fontName, "ptr", 0, "ptr*", &fam)
     DllCall("gdiplus\GdipCreateFont", "ptr", fam, "float", px, "int", 0, "int", 2, "ptr*", &font)  ; Pixel
     DllCall("gdiplus\GdipCreateStringFormat", "int", 0x1000, "int", 0, "ptr*", &fmt)               ; NoWrap
@@ -2844,8 +2844,8 @@ ButtonBitmap(w, h, bg, fg, glyph, label, sc) {
     DllCall("gdiplus\GdipGraphicsClear", "ptr", gr, "uint", 0xFF161616)     ; Hintergrund der Übersicht
     GdipRoundRect(gr, 0xFF000000 | Integer("0x" bg), 0, 0, w - 1, h - 1, Round(8 * sc))
     ipx := 15 * sc, gw := GdipText(0, glyph, ipx, , , , , , ICON_FONT), px := Round(12 * sc)
-    GdipText(gr, glyph, ipx, fg, px, 0, gw + 2, h, ICON_FONT)
-    GdipText(gr, label, 14.5 * sc, fg, px + gw + Round(9 * sc), 0, w, h)
+    GdipText(gr, glyph, ipx, fg, px, 0, gw + 2, h, ICON_FONT, 5)
+    GdipText(gr, label, 14.5 * sc, fg, px + gw + Round(9 * sc), 0, w, h, "Segoe UI Semibold", 5)   ; ClearType: deckender Hintergrund
     DllCall("gdiplus\GdipDeleteGraphics", "ptr", gr)
     DllCall("SelectObject", "ptr", hdc, "ptr", obm)
     DllCall("DeleteDC", "ptr", hdc)
