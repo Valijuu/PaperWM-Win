@@ -89,7 +89,7 @@ Each monitor shows one workspace. As in GNOME, workspaces come and go on their o
 
 | Key | Effect |
 | --- | --- |
-| Tap Windows | Overview as in GNOME: all workspaces stacked, with large live previews of the windows. All rows are the same size. If not all workspaces fit on the screen, or a workspace is wider than the screen, the overview scrolls along with the selection as in niri. Arrow keys, Tab or the mouse wheel select a window or an empty workspace, Enter or a click jumps there, Esc or another tap closes it. If you type text instead, you land in Windows search with that text. For this, tapping Windows no longer opens the Start menu; use Ctrl+Esc or the Windows icon in the taskbar instead. |
+| Tap Windows | Overview as in GNOME: all workspaces stacked, with large live previews of the windows. All rows are the same size. If not all workspaces fit on the screen, or a workspace is wider than the screen, the overview scrolls along with the selection as in niri. Arrow keys, Tab or the mouse wheel select a window or an empty workspace, Enter or a click jumps there, Esc or another tap closes it. At the top left are the buttons "Sitzung speichern" (save session), "Sitzung laden" (load session) and "Hilfe" (help). The help (also F1) lists all keys of the overview. If you type text instead, you land in Windows search with that text. For this, tapping Windows no longer opens the Start menu; use Ctrl+Esc or the Windows icon in the taskbar instead. |
 | Windows+Page↓ / Windows+Page↑ | Next / previous workspace |
 | Windows+F2 | Rename the current workspace (in the overview: F2 for the selected one). An empty name restores "Workspace n". |
 | Windows+Ctrl+Page↓ / Windows+Ctrl+Page↑ | Take the active window to the next / previous workspace |
@@ -127,7 +127,7 @@ The scratch layer keeps floating windows outside the strip, such as a calculator
 
 A session stores all workspaces with all windows and remembers how each program is started. When you load it, its workspaces are added as **new workspaces**; your current ones stay as they are. PaperWM starts the missing programs, puts every window in its place and jumps to the first loaded workspace. Programs that are already running (such as Teams via autostart) are reused instead of being started twice; their windows move into the new workspaces.
 
-- **Save:** the 💾 icon on the workspace indicator at the top left, "Sitzung speichern" (save session) at the top right of the overview (or Ctrl+S, only while the overview is open), or the tray menu (green "H" at the bottom right next to the clock). Then enter a name, such as "Work" or "Uni".
+- **Save:** the 💾 icon on the workspace indicator at the top left, "Sitzung speichern" (save session) at the top left of the overview (or Ctrl+S, only while the overview is open), or the tray menu (green "H" at the bottom right next to the clock). Then enter a name, such as "Work" or "Uni".
 - **Load:** the ✎ icon on the indicator → "Sitzung laden" (load session), "Sitzung laden ▾" in the overview, or the tray menu. It also lists "Letzte Sitzung" (last session): the state at the last shutdown.
 - **Delete:** the ✎ icon on the indicator → "Sitzung löschen" (delete session), or the tray menu.
 - **After boot**, PaperWM asks how to start: "Leer starten" (start empty), "Letzte Sitzung" (last session) or a saved session. Without a choice it continues with "start empty" after 15 seconds.

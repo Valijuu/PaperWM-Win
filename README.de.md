@@ -89,7 +89,7 @@ Jeder Monitor zeigt einen Workspace. Wie bei GNOME entstehen und verschwinden Wo
 
 | Taste | Wirkung |
 | --- | --- |
-| Windows tippen | Übersicht wie bei GNOME: alle Workspaces untereinander mit großen Live-Vorschauen der Fenster. Alle Zeilen sind gleich groß. Passen nicht alle Workspaces auf den Bildschirm oder ist ein Workspace breiter als der Bildschirm, scrollt die Übersicht wie bei niri mit der Auswahl mit. Pfeiltasten, Tab oder das Mausrad wählen ein Fenster oder einen leeren Workspace, Enter oder ein Klick springt hin, Esc oder erneutes Tippen schließt. Wer stattdessen Text tippt, landet mit diesem Text in der Windows-Suche. Das Startmenü öffnet sich dafür nicht mehr beim Tippen auf Windows, sondern über Strg+Esc oder das Windows-Symbol in der Taskleiste. |
+| Windows tippen | Übersicht wie bei GNOME: alle Workspaces untereinander mit großen Live-Vorschauen der Fenster. Alle Zeilen sind gleich groß. Passen nicht alle Workspaces auf den Bildschirm oder ist ein Workspace breiter als der Bildschirm, scrollt die Übersicht wie bei niri mit der Auswahl mit. Pfeiltasten, Tab oder das Mausrad wählen ein Fenster oder einen leeren Workspace, Enter oder ein Klick springt hin, Esc oder erneutes Tippen schließt. Oben links stehen die Schaltflächen „Sitzung speichern“, „Sitzung laden“ und „Hilfe“. Die Hilfe (auch F1) listet alle Tasten der Übersicht. Wer stattdessen Text tippt, landet mit diesem Text in der Windows-Suche. Das Startmenü öffnet sich dafür nicht mehr beim Tippen auf Windows, sondern über Strg+Esc oder das Windows-Symbol in der Taskleiste. |
 | Windows+Bild↓ / Windows+Bild↑ | Nächster / vorheriger Workspace |
 | Windows+F2 | Aktuellen Workspace umbenennen (in der Übersicht: F2 für den ausgewählten). Leerer Name = wieder „Workspace n“. |
 | Windows+Strg+Bild↓ / Windows+Strg+Bild↑ | Aktives Fenster in den nächsten / vorherigen Workspace mitnehmen |
@@ -127,7 +127,7 @@ Der Scratch-Layer hält schwebende Fenster außerhalb des Streifens, etwa einen 
 
 Eine Sitzung speichert alle Workspaces mit allen Fenstern und merkt sich, wie jedes Programm gestartet wird. Lädst du sie wieder, kommen ihre Workspaces als **neue Workspaces** hinzu, deine aktuellen bleiben, wie sie sind. PaperWM startet die fehlenden Programme, legt jedes Fenster an seinen Platz und springt in den ersten geladenen Workspace. Programme, die schon laufen (z. B. Teams per Autostart), werden wiederverwendet statt doppelt gestartet. Ihre Fenster ziehen dabei in die neuen Workspaces um.
 
-- **Speichern:** Symbol 💾 an der Workspace-Anzeige oben links, „Sitzung speichern“ oben rechts in der Übersicht (oder Strg+S, nur solange die Übersicht offen ist) oder im Tray-Menü (grünes „H“ unten rechts bei der Uhr). Dann einen Namen eingeben, z. B. „Arbeit“ oder „Uni“.
+- **Speichern:** Symbol 💾 an der Workspace-Anzeige oben links, „Sitzung speichern“ oben links in der Übersicht (oder Strg+S, nur solange die Übersicht offen ist) oder im Tray-Menü (grünes „H“ unten rechts bei der Uhr). Dann einen Namen eingeben, z. B. „Arbeit“ oder „Uni“.
 - **Laden:** Symbol ✎ an der Anzeige → „Sitzung laden“, „Sitzung laden ▾“ in der Übersicht oder im Tray-Menü. Dort steht auch „Letzte Sitzung“: der Stand beim letzten Herunterfahren.
 - **Löschen:** Symbol ✎ an der Anzeige → „Sitzung löschen“ oder im Tray-Menü.
 - **Nach dem Hochfahren** fragt PaperWM, womit es losgehen soll: „Leer starten“, „Letzte Sitzung“ oder eine gespeicherte Sitzung. Ohne Auswahl geht es nach 15 Sekunden mit „Leer starten“ weiter.

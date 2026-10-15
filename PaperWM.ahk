@@ -168,7 +168,7 @@ global G := {active: 0, scratch: [], q: [], openPos: "right", focusCenter: false
 global NAV := {active: false, kind: "", list: [], idx: 1, mon: 0, hwnd: 0}
 global HL := {gui: 0, key: "", region: "", dwm: 0, cref: 0}
 global OV := {active: false, opened: 0, down: 0, clean: false, ih: 0, kh: 0, searching: 0, buf: ""
-    , ctrls: [], rows: [], scroll: 0, scrollAnim: 0, pad: 0, viewW: 0, viewH: 0, contentH: 0, top: 0, clip: 0, buttons: [], gui: 0, thumbs: [], items: [], sel: 0, mon: 1, frame: []}
+    , ctrls: [], rows: [], scroll: 0, scrollAnim: 0, pad: 0, viewW: 0, viewH: 0, contentH: 0, top: 0, clip: 0, buttons: [], help: 0, gui: 0, thumbs: [], items: [], sel: 0, mon: 1, frame: []}
 global IND := Map()        ; Monitor → Workspace-Anzeige {gui, key}
 
 global ACTIONS := Map(
@@ -253,7 +253,7 @@ for km in KEYMAP
 for k in ["LWin", "RWin"]                 ; Tippen auf Windows: Übersicht
     Hotkey("~" k, OverviewPress), Hotkey("~" k " Up", OverviewRelease)
 HotIf(OverviewIsOpen)                     ; Tasten, solange die Übersicht offen ist
-for k in ["Left", "Right", "Up", "Down", "Tab", "+Tab", "Enter", "NumpadEnter", "Escape", "WheelUp", "WheelDown", "F2", "^s"]
+for k in ["Left", "Right", "Up", "Down", "Tab", "+Tab", "Enter", "NumpadEnter", "Escape", "WheelUp", "WheelDown", "F1", "F2", "^s"]
     Hotkey(k, OverviewHotkey)
 HotIf()
 
@@ -1967,7 +1967,7 @@ PeekDestroy(h) {
 PeekHwnd(h) => (pk := G.peeks.Get(h, 0)) && pk.key != "" ? pk.gui.Hwnd : 0
 
 PeekMouseActivate(wParam, lParam, msg, hwnd) {
-    if G.peekSrc.Has(hwnd) || (OV.gui && hwnd = OV.gui.Hwnd) || IndicatorMon(hwnd)
+    if G.peekSrc.Has(hwnd) || (OV.gui && hwnd = OV.gui.Hwnd) || (OV.help && hwnd = OV.help.Hwnd) || IndicatorMon(hwnd)
         return 3                                        ; MA_NOACTIVATE
 }
 
@@ -2627,22 +2627,22 @@ OverviewOpen(mi := 0) {
     host := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08000000 -DPIScale")
     host.BackColor := "161616"
     host.SetFont("s11 cC8C8C8", "Segoe UI")
-    ; Kopfleiste: Tastenhinweis links, Sitzungs-Schaltflächen rechts (scrollen nicht mit)
-    bh := Round(30 * sc), bw := Round(180 * sc), gap := Round(8 * sc)
-    hdr := bh + pad                                 ; Inhalt beginnt darunter
-    OV.buttons := []
+    ; Kopfleiste oben links (scrollt nicht mit): Speichern hervorgehoben, Laden, Hilfe.
     ; Schaltfläche = Symbol (Symbolschrift) + Beschriftung direkt daneben, gleicher Hintergrund
-    for b in [["Sitzung laden ▾", "load", 0xE8B7], ["Sitzung speichern", "save", 0xE74E]] {
-        bx := mw - pad - A_Index * bw - (A_Index - 1) * gap
-        host.SetFont("s12 cFFFFFF", ICON_FONT)
-        host.Add("Text", Format("x{} y{} w{} h{} Center 0x200 Background2A2A2A", bx, pad, bh, bh), Chr(b[3]))
-        host.SetFont("s11 cFFFFFF", "Segoe UI")
-        host.Add("Text", Format("x{} y{} w{} h{} 0x200 Background2A2A2A", bx + bh, pad, bw - bh, bh), b[1])
+    bh := Round(36 * sc), gap := Round(10 * sc)
+    hdr := bh + pad                                 ; Inhalt beginnt darunter
+    OV.buttons := [], bx := pad, accent := OverviewColor()
+    for b in [["Sitzung speichern", "save", 0xE74E, 210], ["Sitzung laden ▾", "load", 0xE8B7, 190]
+        , ["Hilfe", "help", 0xE897, 120]] {
+        bw := Round(b[4] * sc), primary := A_Index = 1
+        bg := primary ? accent : "2E2E2E", fc := primary ? "101010" : "FFFFFF"
+        host.SetFont("s13 c" fc, ICON_FONT)
+        host.Add("Text", Format("x{} y{} w{} h{} Center 0x200 Background{}", bx, pad, bh, bh, bg), Chr(b[3]))
+        host.SetFont("s11 c" fc, "Segoe UI")
+        host.Add("Text", Format("x{} y{} w{} h{} 0x200 Background{}", bx + bh, pad, bw - bh, bh, bg), b[1])
         OV.buttons.Push({x: bx, y: pad, w: bw, h: bh, act: b[2]})
+        bx += bw + gap
     }
-    host.SetFont("s11 c8A8A8A", "Segoe UI")
-    host.Add("Text", Format("x{} y{} w{} h{} 0x200", pad, pad, Max(0, mw - 3 * pad - 2 * bw - gap), bh)
-        , "Pfeile/Tab wählen · Enter öffnen · F2 umbenennen · Strg+S Sitzung speichern · Esc schließen")
     host.SetFont("s11 cC8C8C8", "Segoe UI")
     weights := [], total := 0
     for sp in SPACES
@@ -2806,6 +2806,7 @@ OverviewKey(hk) {
             OverviewClose()
             SetTimer(RenameSpace.Bind(sp), -1)
         case "^s": OverviewButton("save")
+        case "F1": OverviewHelp()
     }
 }
 
@@ -2815,6 +2816,10 @@ OverviewButton(act) {
     for e in OV.buttons
         if e.act = act
             b := e
+    if act = "help" {
+        OverviewHelp(b)
+        return
+    }
     OverviewClose()
     if act = "save"
         SetTimer(SaveSessionPrompt, -1)
@@ -2822,6 +2827,51 @@ OverviewButton(act) {
         x := MONS[mi].ml + b.x, y := MONS[mi].mt + b.y + b.h
         SetTimer(() => (CoordMode("Menu", "Screen"), G.loadMenu.Show(x, y)), -1)
     }
+}
+
+; Hilfefenster unter der Schaltfläche „Hilfe“ ein-/ausblenden. Eigenes Fenster über der
+; Übersicht, weil deren Live-Vorschauen sonst darüber gezeichnet würden.
+OverviewHelp(b := 0) {
+    if OV.help {
+        try OV.help.Destroy()
+        OV.help := 0
+        return
+    }
+    if !b
+        for e in OV.buttons
+            if e.act = "help"
+                b := e
+    m := MONS[OV.mon], sc := m.scale
+    keys := [["Navigation", ""]
+        , ["← → ↑ ↓  oder  Tab", "Fenster oder Workspace auswählen"]
+        , ["Mausrad", "Workspace wechseln"]
+        , ["Enter  oder  Klick", "zum ausgewählten Fenster springen"]
+        , ["Esc  oder  Windows", "Übersicht schließen"]
+        , ["Text tippen", "Windows-Suche mit diesem Text öffnen"]
+        , ["", ""]
+        , ["Workspaces und Sitzungen", ""]
+        , ["F2", "ausgewählten Workspace umbenennen"]
+        , ["Strg+S", "Sitzung speichern (nur in der Übersicht)"]
+        , ["Sitzung laden ▾", "gespeicherte Sitzung als neue Workspaces laden"]
+        , ["F1", "diese Hilfe ein- / ausblenden"]]
+    host := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08000000 -DPIScale +Owner" OV.gui.Hwnd)
+    host.BackColor := "242424"
+    host.MarginX := Round(18 * sc), host.MarginY := Round(14 * sc)
+    kw := Round(190 * sc), dw := Round(330 * sc), lh := Round(26 * sc)
+    for k in keys {
+        if k[2] = "" {                              ; Überschrift bzw. Leerzeile
+            host.SetFont("s11 bold cFFFFFF", "Segoe UI")
+            host.Add("Text", Format("xm w{} h{} 0x200", kw + dw, lh), k[1])
+            continue
+        }
+        host.SetFont("s11 norm cFFFFFF", "Segoe UI")
+        host.Add("Text", Format("xm w{} h{} 0x200", kw, lh), k[1])
+        host.SetFont("s11 norm cB4B4B4", "Segoe UI")
+        host.Add("Text", Format("x+0 yp w{} h{} 0x200", dw, lh), k[2])
+    }
+    x := m.ml + (b ? b.x : OV.pad), y := m.mt + (b ? b.y + b.h + Round(8 * sc) : OV.pad)
+    host.Show(Format("x{} y{} NoActivate AutoSize", x, y))
+    OV.help := host
 }
 
 ; dx: vorheriges/nächstes Element derselben Zeile, dy: Zeile wechseln (das Element, das
@@ -2903,6 +2953,9 @@ OverviewClose(keepKeys := false) {
         return
     OV.active := false, OV.scrollAnim := 0
     SetTimer(OverviewScrollTick, 0)
+    if OV.help
+        try OV.help.Destroy()
+    OV.help := 0
     for e in OV.thumbs
         DllCall("dwmapi\DwmUnregisterThumbnail", "ptr", e.t)
     OV.thumbs := [], OV.ctrls := [], OV.frame := []
