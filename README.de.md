@@ -85,7 +85,7 @@ Ausgeschaltet wird über einen Rechtsklick auf das grüne „H“ im Infobereich
 
 Jeder Monitor zeigt einen Workspace. Wie bei GNOME entstehen und verschwinden Workspaces von selbst: Am Ende steht immer genau ein leerer. Schiebst du ein Fenster hinein, kommt ein neuer leerer dazu. Ein leerer Workspace verschwindet, sobald er nirgends mehr angezeigt wird, und die übrigen rücken nach. Löschen musst du also nie etwas. Ausnahme: Ein Workspace mit eigenem Namen bleibt auch leer bestehen. Beim Mitnehmen bleibt das aktive Fenster sichtbar, während der Workspace drumherum wechselt.
 
-**Workspace-Anzeige:** Oben links auf jedem Monitor steht wie bei GNOME eine kleine Pille mit einem Punkt pro Workspace. Der dort angezeigte Workspace ist der längliche Strich, weiß auf dem aktiven Monitor. Leere Workspaces sind dunkler. Rechts daneben steht der Name des Workspaces. Ein Klick darauf öffnet die Übersicht, ein Rechtsklick öffnet ein Menü: Workspace umbenennen sowie Sitzung speichern, laden und löschen.
+**Workspace-Anzeige:** Oben links auf jedem Monitor steht wie bei GNOME eine kleine Pille mit einem Punkt pro Workspace. Der dort angezeigte Workspace ist der längliche Strich, weiß auf dem aktiven Monitor. Leere Workspaces sind dunkler. Rechts daneben stehen der Name des Workspaces und zwei Symbole: 💾 speichert die aktuelle Sitzung, ✎ öffnet ein Menü zum Umbenennen des Workspaces sowie zum Laden und Löschen von Sitzungen (dasselbe Menü gibt es per Rechtsklick). Ein Klick auf die Punkte oder den Namen öffnet die Übersicht. Die Anzeige hat oben einen eigenen Streifen, die Fenster beginnen darunter.
 
 | Taste | Wirkung |
 | --- | --- |
@@ -125,11 +125,11 @@ Der Scratch-Layer hält schwebende Fenster außerhalb des Streifens, etwa einen 
 
 ## Sitzungen
 
-Eine Sitzung speichert alle Workspaces mit allen Fenstern und merkt sich, wie jedes Programm gestartet wird. Lädst du sie wieder, startet PaperWM die fehlenden Programme und legt jedes Fenster an seinen Platz. Programme, die schon laufen (z. B. Teams per Autostart), werden wiederverwendet statt doppelt gestartet.
+Eine Sitzung speichert alle Workspaces mit allen Fenstern und merkt sich, wie jedes Programm gestartet wird. Lädst du sie wieder, kommen ihre Workspaces als **neue Workspaces** hinzu, deine aktuellen bleiben, wie sie sind. PaperWM startet die fehlenden Programme, legt jedes Fenster an seinen Platz und springt in den ersten geladenen Workspace. Programme, die schon laufen (z. B. Teams per Autostart), werden wiederverwendet statt doppelt gestartet. Ihre Fenster ziehen dabei in die neuen Workspaces um.
 
-- **Speichern:** in der Übersicht oben rechts „Sitzung speichern“ (oder Strg+S, solange die Übersicht offen ist), per Rechtsklick auf die Workspace-Anzeige oben links oder im Tray-Menü (grünes „H“ unten rechts bei der Uhr). Dann einen Namen eingeben, z. B. „Arbeit“ oder „Uni“.
-- **Laden:** „Sitzung laden“ an denselben Stellen. Dort steht auch „Letzte Sitzung“: der Stand beim letzten Herunterfahren.
-- **Löschen:** „Sitzung löschen“ im Rechtsklick-Menü der Anzeige oder im Tray-Menü.
+- **Speichern:** Symbol 💾 an der Workspace-Anzeige oben links, „Sitzung speichern“ oben rechts in der Übersicht (oder Strg+S, nur solange die Übersicht offen ist) oder im Tray-Menü (grünes „H“ unten rechts bei der Uhr). Dann einen Namen eingeben, z. B. „Arbeit“ oder „Uni“.
+- **Laden:** Symbol ✎ an der Anzeige → „Sitzung laden“, „Sitzung laden ▾“ in der Übersicht oder im Tray-Menü. Dort steht auch „Letzte Sitzung“: der Stand beim letzten Herunterfahren.
+- **Löschen:** Symbol ✎ an der Anzeige → „Sitzung löschen“ oder im Tray-Menü.
 - **Nach dem Hochfahren** fragt PaperWM, womit es losgehen soll: „Leer starten“, „Letzte Sitzung“ oder eine gespeicherte Sitzung. Ohne Auswahl geht es nach 15 Sekunden mit „Leer starten“ weiter.
 
 Grenzen:
@@ -151,7 +151,7 @@ Alle Einstellungen stehen am Anfang von `PaperWM.ahk`. Nach einer Änderung im T
 | `WIDTH_STEPS`, `HEIGHT_STEPS` | Stufen für Windows+R bzw. Windows+Shift+R |
 | `ANIM_MS` | Dauer der Animationen in ms, `0` = aus (Standard 180) |
 | `OVERVIEW_ON_TAP` | Tippen auf Windows öffnet die Übersicht statt des Startmenüs (Standard `true`) |
-| `SHOW_INDICATOR` | Workspace-Anzeige oben links an / aus |
+| `SHOW_INDICATOR`, `INDICATOR_SIZE` | Workspace-Anzeige oben links an / aus, ihre Höhe in px (Standard 26; der obere Rand wächst mit) |
 | `HIGHLIGHT`, `HIGHLIGHT_COLOR`, `HIGHLIGHT_WIDTH` | Rahmen um das aktive Fenster: an/aus, Farbe (leer = Windows-Akzentfarbe, eine zu dunkle wird aufgehellt, sonst z. B. `"4A90E2"`), Stärke |
 | `HIGHLIGHT_DWM` | Zusätzlich den Windows-11-Fensterrand des aktiven Fensters einfärben |
 | `FLOAT_EXES`, `FLOAT_CLASSES` | Programme bzw. Fensterklassen, die schweben statt gekachelt zu werden |

@@ -35,6 +35,8 @@ global ANIM_MS         := 180     ; Dauer der Scroll-Animation in ms (0 = aus)
 global WARP_MOUSE      := true    ; Maus beim Monitorwechsel mitnehmen
 global OVERVIEW_ON_TAP := true    ; Tippen auf Windows öffnet die Übersicht statt des Startmenüs
 global SHOW_INDICATOR  := true    ; Workspace-Anzeige oben links auf jedem Monitor
+global INDICATOR_SIZE  := 26      ; Höhe der Anzeige in px; der obere Rand wächst mit
+global ICON_FONT       := "Segoe MDL2 Assets"   ; Symbolschrift von Windows (Speichern, Bearbeiten …)
 global SHOW_OSD        := true    ; Workspace-Anzeige einblenden
 
 ; Hervorhebung des aktiven Fensters
@@ -151,7 +153,7 @@ global OPEN_POSITIONS := ["right", "left", "start", "end", "down"]
 global G := {active: 0, scratch: [], q: [], openPos: "right", focusCenter: false, paused: false
     , focusGrace: 0, hooks: [], parkX: 0, parkY: 0, osd: 0, osdText: 0, dirty: false
     , launch: Map()        ; hwnd → wie das Programm gestartet wird (für Sitzungen)
-    , restore: 0, frozen: false, loadMenu: Menu(), delMenu: Menu()
+    , restore: 0, tip: "", loadMenu: Menu(), delMenu: Menu()
     , minimized: Map()     ; hwnd → Platz im Streifen, solange das Fenster minimiert ist
     , placed: Map()        ; hwnd → zuletzt gesetzte Position (spart Abfragen)
     , borders: Map()       ; hwnd → unsichtbare Fensterränder
@@ -266,7 +268,8 @@ OnMessage(0x5556, DebugOverview)                            ; Debug: Übersicht 
 OnMessage(0x5557, (*) => DEBUG ? SetTimer(RestoreSession.Bind(SessionFile("_test")), -1) : 0)  ; Debug: Sitzung „_test“ laden
 OnMessage(0x21, PeekMouseActivate)                          ; WM_MOUSEACTIVATE: Vorschau nicht aktivieren
 OnMessage(0x201, PeekClick)                                 ; WM_LBUTTONDOWN auf einer Vorschau
-OnMessage(0x204, IndicatorRightClick)                       ; WM_RBUTTONDOWN: Workspace umbenennen
+OnMessage(0x204, IndicatorRightClick)                       ; WM_RBUTTONDOWN: Menü der Workspace-Anzeige
+OnMessage(0x200, IndicatorHover)                            ; WM_MOUSEMOVE: Tooltips der Anzeige
 SetTimer(Sanity, 2000)
 SetTimer(PeriodicSave, 60000)                               ; zusätzlich regelmäßig speichern (Titel aktuell halten)
 OnExit(Cleanup)
@@ -473,7 +476,7 @@ MarkDirty() {
 SaveLayout() {
     Critical "On"
     G.dirty := false
-    if !SPACES.Length || G.frozen               ; frozen: Sitzung wird gerade geladen
+    if !SPACES.Length
         return
     WriteFile(LAYOUT_FILE, LayoutText())
 }
@@ -578,7 +581,8 @@ PeriodicSave() => SaveLayout()     ; eigene Funktion, damit MarkDirty diesen Tim
 ;=============================== Sitzungen ===================================
 ; Eine Sitzung ist ein gespeichertes Layout (alle Workspaces und Fenster) samt der Angabe,
 ; wie jedes Programm gestartet wird. Beim Laden werden schon offene Fenster
-; wiederverwendet, fehlende Programme gestartet und alles an seinen Platz gelegt.
+; wiederverwendet, fehlende Programme gestartet und alles in neue Workspaces gelegt
+; (die bisherigen bleiben erhalten).
 ; Beim ersten Start nach dem Hochfahren fragt PaperWM, womit es losgehen soll.
 
 ; Wie das Programm des Fensters h wieder gestartet wird (Pfad, Parameter, App-ID)
@@ -705,7 +709,7 @@ OpenCandidates(skip) {
 }
 
 ; Lädt eine Sitzung: offene Fenster wiederverwenden, fehlende Programme starten, warten,
-; dann das Layout schreiben und PaperWM neu laden (Init legt alles an seinen Platz)
+; dann alles in neue Workspaces legen (RestoreApply)
 RestoreSession(file, *) {
     if G.restore || !(st := LoadLayout(file))
         return
@@ -723,7 +727,7 @@ RestoreSession(file, *) {
     for k, grp in groups
         if LaunchRecord(grp.first)
             grp.launched := 1, grp.last := A_TickCount
-    G.restore := {file: file, recs: recs, used: used, groups: groups, start: A_TickCount}
+    G.restore := {st: st, recs: recs, used: used, groups: groups, start: A_TickCount}
     Osd("Sitzung wird geladen …")
     SetTimer(RestoreTick, 500)
 }
@@ -767,28 +771,66 @@ RestoreTick() {
     if DEBUG
         for r in rs.recs
             Log(Format("Sitzung: {} / {} → {}", r.exe, r.cls, r.match))
-    ; Layout mit den zugeordneten Fenstern schreiben (H/X-Zeilen in Dateireihenfolge)
-    out := "", i := 0
-    loop parse FileRead(rs.file, "UTF-8"), "`n", "`r" {
-        line := A_LoopField
-        if line = ""
-            continue
-        f := StrSplit(line, "`t")
-        if (f[1] = "H" || f[1] = "X") && ++i <= rs.recs.Length {
-            f[2] := rs.recs[i].match
-            line := ""
-            for v in f
-                line .= (A_Index > 1 ? "`t" : "") v
-        }
-        out .= line "`n"
-    }
     G.restore := 0
-    ; Nicht mehr speichern bis zum Neuladen: Reload() kehrt sofort zurück, und das Aufräumen
-    ; beim Beenden würde sonst den alten Stand über die Sitzung schreiben
-    G.frozen := true
-    if WriteFile(LAYOUT_FILE, out)
-        Reload()
-    SetTimer(() => G.frozen := false, -5000)      ; nur falls das Neuladen scheitert
+    try RestoreApply(rs.st)
+    catch Error as e
+        Log("Sitzung anwenden: " e.Message " (Zeile " e.Line ")")
+}
+
+; Legt die Workspaces der Sitzung als neue Workspaces hinten an. Die zugeordneten Fenster
+; ziehen dorthin um, alles andere bleibt, wo es ist. Danach wird der erste geladene
+; Workspace auf dem aktuellen Monitor gezeigt.
+RestoreApply(st) {
+    mi := CurMonIdx(), first := 0, touched := Map(), created := []
+    for i, ws in st.spaces {
+        sp := 0
+        for c in ws.cols {
+            found := [], fracs := [], sum := 0
+            for r in c.wins
+                if r.match && DllCall("IsWindow", "ptr", r.match) && !IndexOf(found, r.match)
+                    found.Push(r.match), fracs.Push(r.frac), sum += r.frac
+            if !found.Length
+                continue
+            if !sp {
+                sp := Space(SPACES.Length + 1), sp.name := ws.name, sp.lastMon := mi
+                SPACES.Push(sp), SPACE_MRU.Push(sp), created.Push(sp)
+            }
+            for h in found {                      ; aus dem bisherigen Platz herausnehmen
+                if loc := RemoveWin(h)
+                    touched[loc.sp] := true
+                RemoveVal(G.scratch, h), MapDel(G.minimized, h), MapDel(G.placed, h)
+            }
+            col := Column(found[1], SavedWidth(c.width, sp))
+            col.wins := found, col.fracs := []
+            for f in fracs
+                col.fracs.Push(sum > 0 ? f / sum : 1 / found.Length)
+            col.full := c.full, col.ord := sp.cols.Length
+            col.focusRow := Clamp(c.focusRow, 1, found.Length)
+            sp.cols.Push(col)
+            for h in found
+                WINS[h] := sp
+        }
+        if sp
+            sp.scrollX := ws.scrollX, sp.focusCol := Clamp(ws.focusCol, 1, sp.cols.Length)
+    }
+    for r in st.scratch
+        if r.match && DllCall("IsWindow", "ptr", r.match) && !WINS.Has(r.match) {
+            if loc := RemoveWin(r.match)
+                touched[loc.sp] := true
+            if !IndexOf(G.scratch, r.match)
+                G.scratch.Push(r.match)
+        }
+    for sp, _ in touched                          ; bisherige Workspaces ohne die Fenster
+        EnsureVisible(sp), Layout(sp)
+    for sp in created                             ; neue erst einmal verstecken
+        Layout(sp)
+    if created.Length {
+        cur := MONS[mi].space
+        ShowSpace(created[1], mi, cur ? WsDir(cur, created[1]) : 0)
+        FocusSpace(created[1])
+        Osd("Sitzung geladen: " created.Length " Workspace" (created.Length > 1 ? "s" : ""), mi)
+    }
+    AfterChange()
 }
 
 SessionFile(name) => SESSION_DIR "\" name ".session"
@@ -955,6 +997,10 @@ MonScale(x, y) {
 ; Pixelwert aus der Konfiguration für Monitor m umrechnen
 Px(v, m) => Round(v * m.scale)
 
+; Rand oben: mindestens V_MARGIN, mit Workspace-Anzeige so hoch, dass sie mit etwas Luft
+; darüber und darunter hineinpasst, ohne die Fenster zu überdecken
+TopMargin(m) => SHOW_INDICATOR ? Max(Px(V_MARGIN, m), Px(INDICATOR_SIZE + 12, m)) : Px(V_MARGIN, m)
+
 AssignSpaces(old, pref := 0) {
     for sp in SPACES
         sp.mon := 0
@@ -1052,14 +1098,18 @@ UpdateIndicator() {
 ; Gezeichnet mit GDI+ (geglättete Kanten) in ein halbtransparentes Fenster (Layered Window)
 DrawIndicator(m, key) {
     GdipInit()
-    s := m.scale, hh := Round(16 * s), d := Round(8 * s), pill := Round(22 * s), gap := Round(5 * s)
+    s := m.scale * INDICATOR_SIZE / 16          ; Maße unten für 16 px Höhe
+    hh := Round(16 * s), d := Round(8 * s), pill := Round(22 * s), gap := Round(5 * s)
     pad := (hh - d) // 2, fpx := 11 * s, active := m.space = G.active
     label := SpaceName(m.space)
     tw := GdipText(0, label, fpx)                            ; nur messen
-    w := pad + Round(8 * s) + tw + hh // 2
+    ; Symbole rechts vom Namen: Speichern und Bearbeiten (Symbolschrift von Windows)
+    ipx := 11 * s, isz := hh, igap := Round(2 * s), icons := [Chr(0xE74E), Chr(0xE70F)]
+    textX := pad - gap + Round(8 * s)
     for sp in SPACES
-        w += (sp = m.space ? pill : d) + gap
-    w -= gap
+        textX += (sp = m.space ? pill : d) + gap
+    iconX := textX + tw + Round(10 * s)
+    w := iconX + 2 * isz + igap + Round(4 * s)
     ; 32-Bit-Bild mit Alphakanal
     hdc := DllCall("CreateCompatibleDC", "ptr", 0, "ptr")
     bi := Buffer(40, 0)
@@ -1070,7 +1120,7 @@ DrawIndicator(m, key) {
     gr := 0
     DllCall("gdiplus\GdipCreateFromHDC", "ptr", hdc, "ptr*", &gr)
     DllCall("gdiplus\GdipSetSmoothingMode", "ptr", gr, "int", 4)      ; AntiAlias
-    GdipPill(gr, 0xE0141414, 0, 0, w, hh)
+    GdipPill(gr, 0xF5141414, 0, 0, w, hh)
     x := pad
     for sp in SPACES {
         cur := sp = m.space
@@ -1078,10 +1128,17 @@ DrawIndicator(m, key) {
         GdipPill(gr, c, x, pad, cur ? pill : d, d)
         x += (cur ? pill : d) + gap
     }
-    GdipText(gr, label, fpx, active ? 0xFFFFFFFF : 0xFFB4B4B4, x - gap + Round(8 * s), 0, tw + 4, hh)
+    GdipText(gr, label, fpx, active ? 0xFFFFFFFF : 0xFFB4B4B4, textX, 0, tw + 4, hh)
+    zones := []                                   ; klickbare Bereiche der Symbole
+    for i, glyph in icons {
+        ix := iconX + (i - 1) * (isz + igap)
+        gw := GdipText(0, glyph, ipx, , , , , , ICON_FONT)
+        GdipText(gr, glyph, ipx, 0xFFB4B4B4, ix + (isz - gw) / 2, 0, gw + 2, hh, ICON_FONT)
+        zones.Push([ix, ix + isz])
+    }
     DllCall("gdiplus\GdipDeleteGraphics", "ptr", gr)
     ; im oberen Rand über den Fenstern, links bündig mit dem Streifen
-    gx := m.l + Px(H_MARGIN, m), gy := m.t + Max(0, (Px(V_MARGIN, m) - hh) // 2)
+    gx := m.l + Px(H_MARGIN, m), gy := m.t + Max(0, (TopMargin(m) - hh) // 2)
     host := Gui("-Caption +ToolWindow +E0x08080000 -DPIScale")      ; NOACTIVATE | LAYERED
     pt := Buffer(8), NumPut("int", gx, "int", gy, pt)
     sz := Buffer(8), NumPut("int", w, "int", hh, sz)
@@ -1092,7 +1149,7 @@ DrawIndicator(m, key) {
     DllCall("SelectObject", "ptr", hdc, "ptr", obm)
     DllCall("DeleteObject", "ptr", hbm)
     DllCall("DeleteDC", "ptr", hdc)
-    return {gui: host, key: key}
+    return {gui: host, key: key, save: zones[1], edit: zones[2]}
 }
 
 GdipInit() {
@@ -1124,14 +1181,14 @@ GdipPill(gr, argb, x, y, w, h) {
 
 ; Text in Segoe UI (Größe px), senkrecht zentriert im Rechteck x/y/w/h. Ohne gr wird nur
 ; gemessen. Gibt die Breite des Texts zurück.
-GdipText(gr, text, px, argb := 0, x := 0, y := 0, w := 0, h := 0) {
+GdipText(gr, text, px, argb := 0, x := 0, y := 0, w := 0, h := 0, fontName := "Segoe UI") {
     fam := 0, font := 0, fmt := 0, br := 0, tmpDC := 0, own := !gr
     if own {                                                  ; Messen: Hilfs-Grafik
         tmpDC := DllCall("CreateCompatibleDC", "ptr", 0, "ptr")
         DllCall("gdiplus\GdipCreateFromHDC", "ptr", tmpDC, "ptr*", &gr)
     }
-    DllCall("gdiplus\GdipSetTextRenderingHint", "ptr", gr, "int", 4)  ; AntiAlias (für Transparenz)
-    DllCall("gdiplus\GdipCreateFontFamilyFromName", "wstr", "Segoe UI", "ptr", 0, "ptr*", &fam)
+    DllCall("gdiplus\GdipSetTextRenderingHint", "ptr", gr, "int", 3)  ; AntiAliasGridFit: scharf, funktioniert mit Transparenz
+    DllCall("gdiplus\GdipCreateFontFamilyFromName", "wstr", fontName, "ptr", 0, "ptr*", &fam)
     DllCall("gdiplus\GdipCreateFont", "ptr", fam, "float", px, "int", 0, "int", 2, "ptr*", &font)  ; Pixel
     DllCall("gdiplus\GdipCreateStringFormat", "int", 0x1000, "int", 0, "ptr*", &fmt)               ; NoWrap
     DllCall("gdiplus\GdipSetStringFormatLineAlign", "ptr", fmt, "int", 1)                          ; Mitte
@@ -1154,6 +1211,45 @@ GdipText(gr, text, px, argb := 0, x := 0, y := 0, w := 0, h := 0) {
     DllCall("gdiplus\GdipDeleteFont", "ptr", font)
     DllCall("gdiplus\GdipDeleteFontFamily", "ptr", fam)
     return width
+}
+
+; Welches Symbol der Anzeige von Monitor mi liegt bei x? ("save", "edit" oder "")
+IndicatorZone(mi, x) {
+    if !(entry := IND.Get(mi, 0))
+        return ""
+    if x >= entry.save[1] && x < entry.save[2]
+        return "save"
+    if x >= entry.edit[1] && x < entry.edit[2]
+        return "edit"
+    return ""
+}
+
+; Linksklick: Speichern-Symbol → Sitzung speichern, Bearbeiten-Symbol → Menü, sonst Übersicht
+IndicatorClick(mi, x) {
+    ToolTip()
+    switch IndicatorZone(mi, x) {
+        case "save": SaveSessionPrompt()
+        case "edit": SpaceMenu(MONS[mi].space)
+        default: OverviewToggle(mi)
+    }
+}
+
+; Tooltip über den Symbolen, damit klar ist, was sie tun
+IndicatorHover(wParam, lParam, msg, hwnd) {
+    if !(mi := IndicatorMon(hwnd))
+        return
+    zone := IndicatorZone(mi, lParam << 48 >> 48)
+    tip := zone = "save" ? "Sitzung speichern" : zone = "edit" ? "Workspace umbenennen, Sitzungen laden oder löschen"
+        : "Übersicht öffnen"
+    if tip != G.tip
+        ToolTip(tip), G.tip := tip
+    SetTimer(IndicatorTipOff, 300)
+}
+
+IndicatorTipOff() {                               ; Maus weg von der Anzeige: Tooltip aus
+    MouseGetPos(, , &under)
+    if !IndicatorMon(under)
+        ToolTip(), G.tip := "", SetTimer(IndicatorTipOff, 0)
 }
 
 ; Rechtsklick auf die Workspace-Anzeige: Menü mit Umbenennen und Sitzungen
@@ -1425,7 +1521,7 @@ StripRects(sp, m) {
         if col.full
             top := 0, colH := m.mb - m.mt
         else
-            top := m.t - m.mt + Px(V_MARGIN, m), colH := m.b - m.t - Px(V_MARGIN, m) - Px(V_MARGIN_BOTTOM, m)
+            top := m.t - m.mt + TopMargin(m), colH := m.b - m.t - TopMargin(m) - Px(V_MARGIN_BOTTOM, m)
         n := col.wins.Length, avail := colH - gap * (n - 1), y := top
         for ri, h in col.wins {
             hh := ri = n ? top + colH - y : Round(avail * col.fracs[ri])
@@ -1877,8 +1973,8 @@ PeekMouseActivate(wParam, lParam, msg, hwnd) {
 
 ; Klick auf eine Vorschau holt das Fenster in den Blick
 PeekClick(wParam, lParam, msg, hwnd) {
-    if mi := IndicatorMon(hwnd) {                       ; Workspace-Anzeige: Übersicht
-        SetTimer(OverviewToggle.Bind(mi), -1)
+    if mi := IndicatorMon(hwnd) {                       ; Workspace-Anzeige
+        SetTimer(IndicatorClick.Bind(mi, lParam << 48 >> 48), -1)
         return 0
     }
     if OV.gui && hwnd = OV.gui.Hwnd {
@@ -2535,13 +2631,19 @@ OverviewOpen(mi := 0) {
     bh := Round(30 * sc), bw := Round(180 * sc), gap := Round(8 * sc)
     hdr := bh + pad                                 ; Inhalt beginnt darunter
     OV.buttons := []
-    for b in [["Sitzung laden ▾", "load"], ["Sitzung speichern", "save"]] {
+    ; Schaltfläche = Symbol (Symbolschrift) + Beschriftung direkt daneben, gleicher Hintergrund
+    for b in [["Sitzung laden ▾", "load", 0xE8B7], ["Sitzung speichern", "save", 0xE74E]] {
         bx := mw - pad - A_Index * bw - (A_Index - 1) * gap
-        host.Add("Text", Format("x{} y{} w{} h{} Center 0x200 Background2A2A2A cFFFFFF", bx, pad, bw, bh), b[1])
+        host.SetFont("s12 cFFFFFF", ICON_FONT)
+        host.Add("Text", Format("x{} y{} w{} h{} Center 0x200 Background2A2A2A", bx, pad, bh, bh), Chr(b[3]))
+        host.SetFont("s11 cFFFFFF", "Segoe UI")
+        host.Add("Text", Format("x{} y{} w{} h{} 0x200 Background2A2A2A", bx + bh, pad, bw - bh, bh), b[1])
         OV.buttons.Push({x: bx, y: pad, w: bw, h: bh, act: b[2]})
     }
-    host.Add("Text", Format("x{} y{} w{} h{} 0x200 c8A8A8A", pad, pad, Max(0, mw - 3 * pad - 2 * bw - gap), bh)
+    host.SetFont("s11 c8A8A8A", "Segoe UI")
+    host.Add("Text", Format("x{} y{} w{} h{} 0x200", pad, pad, Max(0, mw - 3 * pad - 2 * bw - gap), bh)
         , "Pfeile/Tab wählen · Enter öffnen · F2 umbenennen · Strg+S Sitzung speichern · Esc schließen")
+    host.SetFont("s11 cC8C8C8", "Segoe UI")
     weights := [], total := 0
     for sp in SPACES
         weights.Push(sp.cols.Length ? 1 : 0.3), total += weights[weights.Length]

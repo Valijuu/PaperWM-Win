@@ -85,7 +85,7 @@ Right-click the green "H" in the notification area of the taskbar.
 
 Each monitor shows one workspace. As in GNOME, workspaces come and go on their own: there is always exactly one empty workspace at the end. When you move a window into it, a new empty one is added. An empty workspace disappears as soon as no monitor shows it, and the rest move up. So you never have to delete anything. Exception: a workspace with its own name stays even when empty. When you take a window along, it stays visible while the workspace around it changes.
 
-**Workspace indicator:** as in GNOME, the top left of each monitor shows a small pill with one dot per workspace. The workspace shown there is the elongated dash, white on the active monitor. Empty workspaces are darker. The name of the workspace is shown next to it. Clicking it opens the overview, right-clicking opens a menu: rename the workspace, and save, load or delete sessions.
+**Workspace indicator:** as in GNOME, the top left of each monitor shows a small pill with one dot per workspace. The workspace shown there is the elongated dash, white on the active monitor. Empty workspaces are darker. Next to it are the name of the workspace and two icons: 💾 saves the current session, ✎ opens a menu to rename the workspace and to load or delete sessions (the same menu is available by right-clicking). Clicking the dots or the name opens the overview. The indicator has its own strip at the top, and the windows start below it.
 
 | Key | Effect |
 | --- | --- |
@@ -125,11 +125,11 @@ The scratch layer keeps floating windows outside the strip, such as a calculator
 
 ## Sessions
 
-A session stores all workspaces with all windows and remembers how each program is started. When you load it, PaperWM starts the missing programs and puts every window in its place. Programs that are already running (such as Teams via autostart) are reused instead of being started twice.
+A session stores all workspaces with all windows and remembers how each program is started. When you load it, its workspaces are added as **new workspaces**; your current ones stay as they are. PaperWM starts the missing programs, puts every window in its place and jumps to the first loaded workspace. Programs that are already running (such as Teams via autostart) are reused instead of being started twice; their windows move into the new workspaces.
 
-- **Save:** "Sitzung speichern" (save session) at the top right of the overview (or Ctrl+S while the overview is open), by right-clicking the workspace indicator at the top left, or in the tray menu (green "H" at the bottom right next to the clock). Then enter a name, such as "Work" or "Uni".
-- **Load:** "Sitzung laden" (load session) in the same places. It also lists "Letzte Sitzung" (last session): the state at the last shutdown.
-- **Delete:** "Sitzung löschen" (delete session) in the indicator's right-click menu or in the tray menu.
+- **Save:** the 💾 icon on the workspace indicator at the top left, "Sitzung speichern" (save session) at the top right of the overview (or Ctrl+S, only while the overview is open), or the tray menu (green "H" at the bottom right next to the clock). Then enter a name, such as "Work" or "Uni".
+- **Load:** the ✎ icon on the indicator → "Sitzung laden" (load session), "Sitzung laden ▾" in the overview, or the tray menu. It also lists "Letzte Sitzung" (last session): the state at the last shutdown.
+- **Delete:** the ✎ icon on the indicator → "Sitzung löschen" (delete session), or the tray menu.
 - **After boot**, PaperWM asks how to start: "Leer starten" (start empty), "Letzte Sitzung" (last session) or a saved session. Without a choice it continues with "start empty" after 15 seconds.
 
 Limits:
@@ -151,7 +151,7 @@ All settings are at the top of `PaperWM.ahk`. After a change, choose "Neu laden"
 | `WIDTH_STEPS`, `HEIGHT_STEPS` | Steps for Windows+R and Windows+Shift+R |
 | `ANIM_MS` | Animation duration in ms, `0` = off (default 180) |
 | `OVERVIEW_ON_TAP` | Tapping Windows opens the overview instead of the Start menu (default `true`) |
-| `SHOW_INDICATOR` | Workspace indicator at the top left on / off |
+| `SHOW_INDICATOR`, `INDICATOR_SIZE` | Workspace indicator at the top left on / off, its height in px (default 26; the top margin grows with it) |
 | `HIGHLIGHT`, `HIGHLIGHT_COLOR`, `HIGHLIGHT_WIDTH` | Frame around the active window: on/off, color (empty = Windows accent color, brightened if it is too dark, otherwise e.g. `"4A90E2"`), thickness |
 | `HIGHLIGHT_DWM` | Also color the Windows 11 border of the active window |
 | `FLOAT_EXES`, `FLOAT_CLASSES` | Programs or window classes that float instead of being tiled |
