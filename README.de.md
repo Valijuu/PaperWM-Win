@@ -151,7 +151,7 @@ Alle Einstellungen stehen am Anfang von `PaperWM.ahk`. Nach einer Änderung im T
 | `WIDTH_STEPS`, `HEIGHT_STEPS` | Stufen für Windows+R bzw. Windows+Shift+R |
 | `ANIM_MS` | Dauer der Animationen in ms, `0` = aus (Standard 180) |
 | `OVERVIEW_ON_TAP` | Tippen auf Windows öffnet die Übersicht statt des Startmenüs (Standard `true`) |
-| `SHOW_INDICATOR`, `INDICATOR_SIZE` | Workspace-Anzeige oben links an / aus, ihre Höhe in px (Standard 26; der obere Rand wächst mit) |
+| `SHOW_INDICATOR`, `INDICATOR_SIZE` | Workspace-Anzeige oben links an / aus, ihre Höhe in px (Standard 21; der obere Rand wächst mit) |
 | `HIGHLIGHT`, `HIGHLIGHT_COLOR`, `HIGHLIGHT_WIDTH` | Rahmen um das aktive Fenster: an/aus, Farbe (leer = Windows-Akzentfarbe, eine zu dunkle wird aufgehellt, sonst z. B. `"4A90E2"`), Stärke |
 | `HIGHLIGHT_DWM` | Zusätzlich den Windows-11-Fensterrand des aktiven Fensters einfärben |
 | `FLOAT_EXES`, `FLOAT_CLASSES` | Programme bzw. Fensterklassen, die schweben statt gekachelt zu werden |

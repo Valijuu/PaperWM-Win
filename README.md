@@ -151,7 +151,7 @@ All settings are at the top of `PaperWM.ahk`. After a change, choose "Neu laden"
 | `WIDTH_STEPS`, `HEIGHT_STEPS` | Steps for Windows+R and Windows+Shift+R |
 | `ANIM_MS` | Animation duration in ms, `0` = off (default 180) |
 | `OVERVIEW_ON_TAP` | Tapping Windows opens the overview instead of the Start menu (default `true`) |
-| `SHOW_INDICATOR`, `INDICATOR_SIZE` | Workspace indicator at the top left on / off, its height in px (default 26; the top margin grows with it) |
+| `SHOW_INDICATOR`, `INDICATOR_SIZE` | Workspace indicator at the top left on / off, its height in px (default 21; the top margin grows with it) |
 | `HIGHLIGHT`, `HIGHLIGHT_COLOR`, `HIGHLIGHT_WIDTH` | Frame around the active window: on/off, color (empty = Windows accent color, brightened if it is too dark, otherwise e.g. `"4A90E2"`), thickness |
 | `HIGHLIGHT_DWM` | Also color the Windows 11 border of the active window |
 | `FLOAT_EXES`, `FLOAT_CLASSES` | Programs or window classes that float instead of being tiled |

@@ -35,7 +35,7 @@ global ANIM_MS         := 180     ; Dauer der Scroll-Animation in ms (0 = aus)
 global WARP_MOUSE      := true    ; Maus beim Monitorwechsel mitnehmen
 global OVERVIEW_ON_TAP := true    ; Tippen auf Windows öffnet die Übersicht statt des Startmenüs
 global SHOW_INDICATOR  := true    ; Workspace-Anzeige oben links auf jedem Monitor
-global INDICATOR_SIZE  := 26      ; Höhe der Anzeige in px; der obere Rand wächst mit
+global INDICATOR_SIZE  := 21      ; Höhe der Anzeige in px; der obere Rand wächst mit
 global ICON_FONT       := "Segoe MDL2 Assets"   ; Symbolschrift von Windows (Speichern, Bearbeiten …)
 global SHOW_OSD        := true    ; Workspace-Anzeige einblenden
 
