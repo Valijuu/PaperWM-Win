@@ -166,7 +166,7 @@ global G := {active: 0, scratch: [], q: [], openPos: "right", focusCenter: false
 global NAV := {active: false, kind: "", list: [], idx: 1, mon: 0, hwnd: 0}
 global HL := {gui: 0, key: "", region: "", dwm: 0, cref: 0}
 global OV := {active: false, opened: 0, down: 0, clean: false, ih: 0, kh: 0, searching: 0, buf: ""
-    , ctrls: [], rows: [], scroll: 0, scrollAnim: 0, pad: 0, viewW: 0, viewH: 0, contentH: 0, gui: 0, thumbs: [], items: [], sel: 0, mon: 1, frame: []}
+    , ctrls: [], rows: [], scroll: 0, scrollAnim: 0, pad: 0, viewW: 0, viewH: 0, contentH: 0, top: 0, clip: 0, buttons: [], gui: 0, thumbs: [], items: [], sel: 0, mon: 1, frame: []}
 global IND := Map()        ; Monitor → Workspace-Anzeige {gui, key}
 
 global ACTIONS := Map(
@@ -251,7 +251,7 @@ for km in KEYMAP
 for k in ["LWin", "RWin"]                 ; Tippen auf Windows: Übersicht
     Hotkey("~" k, OverviewPress), Hotkey("~" k " Up", OverviewRelease)
 HotIf(OverviewIsOpen)                     ; Tasten, solange die Übersicht offen ist
-for k in ["Left", "Right", "Up", "Down", "Tab", "+Tab", "Enter", "NumpadEnter", "Escape", "WheelUp", "WheelDown", "F2"]
+for k in ["Left", "Right", "Up", "Down", "Tab", "+Tab", "Enter", "NumpadEnter", "Escape", "WheelUp", "WheelDown", "F2", "^s"]
     Hotkey(k, OverviewHotkey)
 HotIf()
 
@@ -1156,12 +1156,22 @@ GdipText(gr, text, px, argb := 0, x := 0, y := 0, w := 0, h := 0) {
     return width
 }
 
-; Rechtsklick auf die Workspace-Anzeige: angezeigten Workspace umbenennen
+; Rechtsklick auf die Workspace-Anzeige: Menü mit Umbenennen und Sitzungen
 IndicatorRightClick(wParam, lParam, msg, hwnd) {
     if mi := IndicatorMon(hwnd) {
-        SetTimer(RenameSpace.Bind(MONS[mi].space), -1)
+        SetTimer(SpaceMenu.Bind(MONS[mi].space), -1)
         return 0
     }
+}
+
+SpaceMenu(sp) {
+    mn := Menu()
+    mn.Add(SpaceName(sp) " umbenennen …", (*) => SetTimer(RenameSpace.Bind(sp), -1))
+    mn.Add()
+    mn.Add("Sitzung speichern …", (*) => SetTimer(SaveSessionPrompt, -1))
+    mn.Add("Sitzung laden", G.loadMenu)
+    mn.Add("Sitzung löschen", G.delMenu)
+    mn.Show()
 }
 
 ; Fragt einen Namen für Workspace sp ab (leer = Standardname "Workspace n")
@@ -2521,13 +2531,24 @@ OverviewOpen(mi := 0) {
     host := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08000000 -DPIScale")
     host.BackColor := "161616"
     host.SetFont("s11 cC8C8C8", "Segoe UI")
+    ; Kopfleiste: Tastenhinweis links, Sitzungs-Schaltflächen rechts (scrollen nicht mit)
+    bh := Round(30 * sc), bw := Round(180 * sc), gap := Round(8 * sc)
+    hdr := bh + pad                                 ; Inhalt beginnt darunter
+    OV.buttons := []
+    for b in [["Sitzung laden ▾", "load"], ["Sitzung speichern", "save"]] {
+        bx := mw - pad - A_Index * bw - (A_Index - 1) * gap
+        host.Add("Text", Format("x{} y{} w{} h{} Center 0x200 Background2A2A2A cFFFFFF", bx, pad, bw, bh), b[1])
+        OV.buttons.Push({x: bx, y: pad, w: bw, h: bh, act: b[2]})
+    }
+    host.Add("Text", Format("x{} y{} w{} h{} 0x200 c8A8A8A", pad, pad, Max(0, mw - 3 * pad - 2 * bw - gap), bh)
+        , "Pfeile/Tab wählen · Enter öffnen · F2 umbenennen · Strg+S Sitzung speichern · Esc schließen")
     weights := [], total := 0
     for sp in SPACES
         weights.Push(sp.cols.Length ? 1 : 0.3), total += weights[weights.Length]
-    free := mh - 2 * pad - (SPACES.Length - 1) * rowGap
-    unit := Max(free / total, (mh - 2 * pad - rowGap) / 2.25)   ; Höhe einer belegten Zeile
+    free := mh - 2 * pad - hdr - (SPACES.Length - 1) * rowGap
+    unit := Max(free / total, (mh - 2 * pad - hdr - rowGap) / 2.25)   ; Höhe einer belegten Zeile
     fg := DllCall("GetForegroundWindow", "ptr"), items := [], thumbs := [], ctrls := [], rows := []
-    sel := 0, top := pad, availW := mw - 2 * pad
+    sel := 0, top := pad + hdr, availW := mw - 2 * pad
     for row, sp in SPACES {
         rowH := unit * weights[row]
         rw := {top: Round(top), bottom: Round(top + rowH), xoff: 0, maxOff: 0}
@@ -2560,7 +2581,7 @@ OverviewOpen(mi := 0) {
             x := pad + Round(r.x * s), y := y0 + Round((r.y - yMin) * s), w := Round(r.w * s), hh := Round(r.h * s)
             thumb := 0
             if DllCall("dwmapi\DwmRegisterThumbnail", "ptr", host.Hwnd, "ptr", r.hwnd, "ptr*", &thumb) = 0
-                thumbs.Push({t: thumb, row: row, x: x, y: y, w: w, h: hh})
+                thumbs.Push({t: thumb, row: row, x: x, y: y, w: w, h: hh, sw: r.w, sh: r.h})
             items.Push({h: r.hwnd, sp: sp, row: row, x: x, y: y, w: w, hh: hh})
             if r.hwnd = fg
                 sel := items.Length
@@ -2572,6 +2593,7 @@ OverviewOpen(mi := 0) {
         OV.frame.Push(host.Add("Text", "x0 y0 w0 h0 Background" OverviewColor()))
     OV.active := true, OV.gui := host, OV.thumbs := thumbs, OV.ctrls := ctrls, OV.items := items
     OV.rows := rows, OV.mon := mi, OV.pad := pad, OV.viewW := mw, OV.viewH := mh
+    OV.top := pad + hdr, OV.clip := pad + bh + gap   ; Inhaltsbeginn, darüber wird abgeschnitten
     OV.contentH := Round(top - rowGap + pad), OV.scroll := 0, OV.opened := A_TickCount
     ; Text abfangen (nicht an die App weitergeben) → Windows-Suche. Pfeile, Enter, Tab und
     ; Esc sind Hotkeys und haben Vorrang.
@@ -2591,8 +2613,8 @@ OverviewSelect(i, animate := true) {
     OV.sel := i
     it := OV.items[i], rw := OV.rows[it.row], pad := OV.pad
     to := OV.scroll
-    if rw.top - pad < to
-        to := rw.top - pad
+    if rw.top - OV.top < to
+        to := rw.top - OV.top
     else if rw.bottom + pad > to + OV.viewH
         to := rw.bottom + pad - OV.viewH
     to := Clamp(to, 0, Max(0, OV.contentH - OV.viewH))
@@ -2629,13 +2651,25 @@ OverviewScrollTick() {
         OV.scrollAnim := 0, SetTimer(OverviewScrollTick, 0)
 }
 
-; Alles nach OV.scroll und den waagerechten Verschiebungen der Zeilen anordnen
+; Alles nach OV.scroll und den waagerechten Verschiebungen der Zeilen anordnen. Was unter
+; die Kopfleiste geschoben wird, wird an OV.clip abgeschnitten.
 OverviewPlace() {
-    for e in OV.ctrls
-        e.c.Move(e.x, e.y - OV.scroll, e.w, e.h)
+    for e in OV.ctrls {
+        y := e.y - OV.scroll, h := e.h
+        if y < OV.clip
+            h -= OV.clip - y, y := OV.clip
+        if h > 0
+            e.c.Move(e.x, y, e.w, h)
+        else
+            e.c.Move(e.x, -10000, e.w, 1)               ; ganz unter der Kopfleiste
+    }
     for e in OV.thumbs {
-        x := e.x - OV.rows[e.row].xoff, y := e.y - OV.scroll
-        DllCall("dwmapi\DwmUpdateThumbnailProperties", "ptr", e.t, "ptr", ThumbProps([x, y, x + e.w, y + e.h]))
+        x := e.x - OV.rows[e.row].xoff, y := e.y - OV.scroll, h := e.h, cut := 0
+        if y < OV.clip
+            cut := Min(h, OV.clip - y), y := OV.clip, h -= cut
+        props := cut ? ThumbProps([x, y, x + e.w, y + h], [0, Round(cut * e.sh / e.h), e.sw, e.sh])
+            : ThumbProps([x, y, x + e.w, y + h])
+        DllCall("dwmapi\DwmUpdateThumbnailProperties", "ptr", e.t, "ptr", props)
     }
     OverviewFrame()
 }
@@ -2669,6 +2703,22 @@ OverviewKey(hk) {
             sp := OV.items[OV.sel].sp
             OverviewClose()
             SetTimer(RenameSpace.Bind(sp), -1)
+        case "^s": OverviewButton("save")
+    }
+}
+
+; Schaltflächen der Kopfleiste
+OverviewButton(act) {
+    mi := OV.mon, b := 0
+    for e in OV.buttons
+        if e.act = act
+            b := e
+    OverviewClose()
+    if act = "save"
+        SetTimer(SaveSessionPrompt, -1)
+    else if b {                                 ; Menü direkt unter der Schaltfläche
+        x := MONS[mi].ml + b.x, y := MONS[mi].mt + b.y + b.h
+        SetTimer(() => (CoordMode("Menu", "Screen"), G.loadMenu.Show(x, y)), -1)
     }
 }
 
@@ -2706,6 +2756,13 @@ DebugOverview(wParam, *) {
 }
 
 OverviewClick(x, y) {
+    for b in OV.buttons
+        if x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h {
+            SetTimer(OverviewButton.Bind(b.act), -1)
+            return
+        }
+    if y < OV.clip                             ; Kopfleiste
+        return
     y += OV.scroll                             ; Bildschirm → Inhaltskoordinaten
     for i, it in OV.items {
         cx := x + OV.rows[it.row].xoff

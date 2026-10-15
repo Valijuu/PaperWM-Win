@@ -85,7 +85,7 @@ Right-click the green "H" in the notification area of the taskbar.
 
 Each monitor shows one workspace. As in GNOME, workspaces come and go on their own: there is always exactly one empty workspace at the end. When you move a window into it, a new empty one is added. An empty workspace disappears as soon as no monitor shows it, and the rest move up. So you never have to delete anything. Exception: a workspace with its own name stays even when empty. When you take a window along, it stays visible while the workspace around it changes.
 
-**Workspace indicator:** as in GNOME, the top left of each monitor shows a small pill with one dot per workspace. The workspace shown there is the elongated dash, white on the active monitor. Empty workspaces are darker. The name of the workspace is shown next to it. Clicking it opens the overview, right-clicking renames the workspace.
+**Workspace indicator:** as in GNOME, the top left of each monitor shows a small pill with one dot per workspace. The workspace shown there is the elongated dash, white on the active monitor. Empty workspaces are darker. The name of the workspace is shown next to it. Clicking it opens the overview, right-clicking opens a menu: rename the workspace, and save, load or delete sessions.
 
 | Key | Effect |
 | --- | --- |
@@ -127,9 +127,9 @@ The scratch layer keeps floating windows outside the strip, such as a calculator
 
 A session stores all workspaces with all windows and remembers how each program is started. When you load it, PaperWM starts the missing programs and puts every window in its place. Programs that are already running (such as Teams via autostart) are reused instead of being started twice.
 
-- **Save:** right-click the tray icon → "Sitzung speichern …" (save session) and enter a name, such as "Work" or "Uni".
-- **Load:** tray → "Sitzung laden" (load session). It also lists "Letzte Sitzung" (last session): the state at the last shutdown.
-- **Delete:** tray → "Sitzung löschen" (delete session).
+- **Save:** "Sitzung speichern" (save session) at the top right of the overview (or Ctrl+S while the overview is open), by right-clicking the workspace indicator at the top left, or in the tray menu (green "H" at the bottom right next to the clock). Then enter a name, such as "Work" or "Uni".
+- **Load:** "Sitzung laden" (load session) in the same places. It also lists "Letzte Sitzung" (last session): the state at the last shutdown.
+- **Delete:** "Sitzung löschen" (delete session) in the indicator's right-click menu or in the tray menu.
 - **After boot**, PaperWM asks how to start: "Leer starten" (start empty), "Letzte Sitzung" (last session) or a saved session. Without a choice it continues with "start empty" after 15 seconds.
 
 Limits:

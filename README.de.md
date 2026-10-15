@@ -85,7 +85,7 @@ Ausgeschaltet wird über einen Rechtsklick auf das grüne „H“ im Infobereich
 
 Jeder Monitor zeigt einen Workspace. Wie bei GNOME entstehen und verschwinden Workspaces von selbst: Am Ende steht immer genau ein leerer. Schiebst du ein Fenster hinein, kommt ein neuer leerer dazu. Ein leerer Workspace verschwindet, sobald er nirgends mehr angezeigt wird, und die übrigen rücken nach. Löschen musst du also nie etwas. Ausnahme: Ein Workspace mit eigenem Namen bleibt auch leer bestehen. Beim Mitnehmen bleibt das aktive Fenster sichtbar, während der Workspace drumherum wechselt.
 
-**Workspace-Anzeige:** Oben links auf jedem Monitor steht wie bei GNOME eine kleine Pille mit einem Punkt pro Workspace. Der dort angezeigte Workspace ist der längliche Strich, weiß auf dem aktiven Monitor. Leere Workspaces sind dunkler. Rechts daneben steht der Name des Workspaces. Ein Klick darauf öffnet die Übersicht, ein Rechtsklick benennt den Workspace um.
+**Workspace-Anzeige:** Oben links auf jedem Monitor steht wie bei GNOME eine kleine Pille mit einem Punkt pro Workspace. Der dort angezeigte Workspace ist der längliche Strich, weiß auf dem aktiven Monitor. Leere Workspaces sind dunkler. Rechts daneben steht der Name des Workspaces. Ein Klick darauf öffnet die Übersicht, ein Rechtsklick öffnet ein Menü: Workspace umbenennen sowie Sitzung speichern, laden und löschen.
 
 | Taste | Wirkung |
 | --- | --- |
@@ -127,9 +127,9 @@ Der Scratch-Layer hält schwebende Fenster außerhalb des Streifens, etwa einen 
 
 Eine Sitzung speichert alle Workspaces mit allen Fenstern und merkt sich, wie jedes Programm gestartet wird. Lädst du sie wieder, startet PaperWM die fehlenden Programme und legt jedes Fenster an seinen Platz. Programme, die schon laufen (z. B. Teams per Autostart), werden wiederverwendet statt doppelt gestartet.
 
-- **Speichern:** Rechtsklick auf das Tray-Symbol → „Sitzung speichern …“ und einen Namen eingeben, z. B. „Arbeit“ oder „Uni“.
-- **Laden:** Tray → „Sitzung laden“. Dort steht auch „Letzte Sitzung“: der Stand beim letzten Herunterfahren.
-- **Löschen:** Tray → „Sitzung löschen“.
+- **Speichern:** in der Übersicht oben rechts „Sitzung speichern“ (oder Strg+S, solange die Übersicht offen ist), per Rechtsklick auf die Workspace-Anzeige oben links oder im Tray-Menü (grünes „H“ unten rechts bei der Uhr). Dann einen Namen eingeben, z. B. „Arbeit“ oder „Uni“.
+- **Laden:** „Sitzung laden“ an denselben Stellen. Dort steht auch „Letzte Sitzung“: der Stand beim letzten Herunterfahren.
+- **Löschen:** „Sitzung löschen“ im Rechtsklick-Menü der Anzeige oder im Tray-Menü.
 - **Nach dem Hochfahren** fragt PaperWM, womit es losgehen soll: „Leer starten“, „Letzte Sitzung“ oder eine gespeicherte Sitzung. Ohne Auswahl geht es nach 15 Sekunden mit „Leer starten“ weiter.
 
 Grenzen:
