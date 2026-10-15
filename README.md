@@ -87,7 +87,7 @@ Each monitor shows one workspace. As in GNOME, workspaces come and go on their o
 
 | Key | Effect |
 | --- | --- |
-| Double-tap Windows | Overview: all workspaces stacked, with live previews of the windows. Arrow keys or Tab select a window or an empty workspace, Enter or a click jumps there, Esc or another double-tap closes it. The first tap briefly opens the Start menu, the second closes it again. |
+| Tap Windows | Overview as in GNOME: all workspaces stacked, with live previews of the windows. Arrow keys or Tab select a window or an empty workspace, Enter or a click jumps there, Esc or another tap closes it. If you type text instead, you land in Windows search with that text. For this, tapping Windows no longer opens the Start menu; use Ctrl+Esc or the Windows icon in the taskbar instead. |
 | Windows+Page↓ / Windows+Page↑ | Next / previous workspace |
 | Windows+Ctrl+Page↓ / Windows+Ctrl+Page↑ | Take the active window to the next / previous workspace |
 | Windows+^ | Go to the most recently used workspace. Holding Windows and pressing ^ repeatedly goes further back. |
@@ -130,7 +130,7 @@ All settings are at the top of `PaperWM.ahk`. After a change, choose "Neu laden"
 | `RESIZE_STEP`, `DRIFT_STEP`, `MIN_COL_WIDTH` | Step size for Windows++/- and Windows+Ö/Ä, narrowest column |
 | `WIDTH_STEPS`, `HEIGHT_STEPS` | Steps for Windows+R and Windows+Shift+R |
 | `ANIM_MS` | Animation duration in ms, `0` = off (default 180) |
-| `OVERVIEW_DOUBLE_TAP` | Maximum time between two taps on Windows for the overview, in ms, `0` = off (default 400) |
+| `OVERVIEW_ON_TAP` | Tapping Windows opens the overview instead of the Start menu (default `true`) |
 | `SHOW_INDICATOR` | Workspace indicator at the top left on / off |
 | `HIGHLIGHT`, `HIGHLIGHT_COLOR`, `HIGHLIGHT_WIDTH` | Frame around the active window: on/off, color (empty = Windows accent color, otherwise e.g. `"4A90E2"`), thickness |
 | `HIGHLIGHT_DWM` | Also color the Windows 11 border of the active window |
@@ -140,7 +140,7 @@ All settings are at the top of `PaperWM.ahk`. After a change, choose "Neu laden"
 
 ## How it works and where the limits are
 
-- **Overridden Windows shortcuts:** while PaperWM runs, it takes over Windows+R (Run), Windows+N, Windows+I, Windows+C, Windows+T, Windows+. (emoji), Windows+Tab and Alt+Tab. Windows+V (clipboard) stays free. To use them temporarily, pause PaperWM from the tray menu.
+- **Overridden Windows shortcuts:** while PaperWM runs, it takes over tapping Windows (Start menu, see the overview), Windows+R (Run), Windows+N, Windows+I, Windows+C, Windows+T, Windows+. (emoji), Windows+Tab and Alt+Tab. Windows+V (clipboard) stays free. To use them temporarily, pause PaperWM from the tray menu.
 - **Held keys:** Windows+T and repeated Windows+^ or Windows+Tab only work while the Windows key stays pressed.
 - **Hidden windows:** windows outside the visible area and on hidden workspaces are switched invisible ("cloaking", the same mechanism Windows uses for its virtual desktops). They stay on their monitor, keep their size, and remain in the taskbar and Alt+Tab. If this mechanism is unavailable, they are parked to the right outside all monitors instead.
 - **Windows at the edge to a neighboring monitor:** on Windows, all monitors share one coordinate space, so a window that crosses the edge would show up on the neighboring monitor. That's why the real window is invisible there, and PaperWM shows a full-size live preview in its place, cut off exactly at the monitor boundary. Nothing is squeezed, nothing spills over. Clicking the preview brings the window into view. At an outer edge with no neighboring monitor, the real window simply extends off-screen. The detection follows the actual monitor arrangement and works with any number of monitors of any size.

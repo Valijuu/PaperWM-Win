@@ -33,7 +33,7 @@ global DRIFT_STEP      := 150     ; px pro Super+Ö/Ä
 global MIN_COL_WIDTH   := 200     ; schmalste Spalte in px
 global ANIM_MS         := 180     ; Dauer der Scroll-Animation in ms (0 = aus)
 global WARP_MOUSE      := true    ; Maus beim Monitorwechsel mitnehmen
-global OVERVIEW_DOUBLE_TAP := 400 ; ms zwischen zwei Tipps auf Windows für die Übersicht (0 = aus)
+global OVERVIEW_ON_TAP := true    ; Tippen auf Windows öffnet die Übersicht statt des Startmenüs
 global SHOW_INDICATOR  := true    ; Workspace-Anzeige oben links auf jedem Monitor
 global SHOW_OSD        := true    ; Workspace-Anzeige einblenden
 
@@ -154,7 +154,7 @@ global G := {active: 0, scratch: [], q: [], openPos: "right", focusCenter: false
     , self: DllCall("GetCurrentProcessId")}
 global NAV := {active: false, kind: "", list: [], idx: 1, mon: 0, hwnd: 0}
 global HL := {gui: 0, key: "", region: "", dwm: 0, cref: 0}
-global OV := {active: false, opened: 0, down: 0, clean: false, ih: 0, lastTap: 0, gui: 0, thumbs: [], items: [], sel: 0, mon: 1, frame: []}
+global OV := {active: false, opened: 0, down: 0, clean: false, ih: 0, kh: 0, searching: 0, buf: "", gui: 0, thumbs: [], items: [], sel: 0, mon: 1, frame: []}
 global IND := Map()        ; Monitor → Workspace-Anzeige {gui, key}
 
 global ACTIONS := Map(
@@ -232,7 +232,7 @@ CloakInit()
 Init()
 for km in KEYMAP
     Hotkey(km[1], MakeHandler(ACTIONS[km[2]]))
-for k in ["LWin", "RWin"]                 ; Doppeltippen auf Windows: Übersicht
+for k in ["LWin", "RWin"]                 ; Tippen auf Windows: Übersicht
     Hotkey("~" k, OverviewPress), Hotkey("~" k " Up", OverviewRelease)
 HotIf(OverviewIsOpen)                     ; Tasten, solange die Übersicht offen ist
 for k in ["Left", "Right", "Up", "Down", "Tab", "+Tab", "Enter", "NumpadEnter", "Escape"]
@@ -676,34 +676,111 @@ UpdateIndicator() {
     }
 }
 
+; Gezeichnet mit GDI+ (geglättete Kanten) in ein halbtransparentes Fenster (Layered Window)
 DrawIndicator(m, key) {
-    s := m.scale, d := Round(8 * s), pill := Round(24 * s), gap := Round(5 * s), pad := Round(4 * s)
-    w := 2 * pad - gap, hh := d + 2 * pad
+    GdipInit()
+    s := m.scale, hh := Round(16 * s), d := Round(8 * s), pill := Round(22 * s), gap := Round(5 * s)
+    pad := (hh - d) // 2, fpx := 11 * s, active := m.space = G.active
+    label := "Workspace " m.space.idx
+    tw := GdipText(0, label, fpx)                            ; nur messen
+    w := pad + Round(8 * s) + tw + hh // 2
     for sp in SPACES
         w += (sp = m.space ? pill : d) + gap
-    host := Gui("-Caption +ToolWindow +E0x08000000 -DPIScale")
-    host.BackColor := "101010"
-    x := pad, dots := []
+    w -= gap
+    ; 32-Bit-Bild mit Alphakanal
+    hdc := DllCall("CreateCompatibleDC", "ptr", 0, "ptr")
+    bi := Buffer(40, 0)
+    NumPut("uint", 40, "int", w, "int", -hh, "ushort", 1, "ushort", 32, bi)
+    bits := 0
+    hbm := DllCall("CreateDIBSection", "ptr", hdc, "ptr", bi, "uint", 0, "ptr*", &bits, "ptr", 0, "uint", 0, "ptr")
+    obm := DllCall("SelectObject", "ptr", hdc, "ptr", hbm, "ptr")
+    gr := 0
+    DllCall("gdiplus\GdipCreateFromHDC", "ptr", hdc, "ptr*", &gr)
+    DllCall("gdiplus\GdipSetSmoothingMode", "ptr", gr, "int", 4)      ; AntiAlias
+    GdipPill(gr, 0xE0141414, 0, 0, w, hh)
+    x := pad
     for sp in SPACES {
-        dw := sp = m.space ? pill : d
-        c := sp = m.space ? (m.space = G.active ? "FFFFFF" : "B0B0B0") : sp.cols.Length ? "8A8A8A" : "454545"
-        dots.Push([host.Add("Text", Format("x{} y{} w{} h{} Background{}", x, pad, dw, d, c)), dw])
-        x += dw + gap
+        cur := sp = m.space
+        c := cur ? (active ? 0xFFFFFFFF : 0xFFB4B4B4) : sp.cols.Length ? 0xFF8C8C8C : 0xFF4C4C4C
+        GdipPill(gr, c, x, pad, cur ? pill : d, d)
+        x += (cur ? pill : d) + gap
     }
+    GdipText(gr, label, fpx, active ? 0xFFFFFFFF : 0xFFB4B4B4, x - gap + Round(8 * s), 0, tw + 4, hh)
+    DllCall("gdiplus\GdipDeleteGraphics", "ptr", gr)
     ; im oberen Rand über den Fenstern, links bündig mit dem Streifen
     gx := m.l + Px(H_MARGIN, m), gy := m.t + Max(0, (Px(V_MARGIN, m) - hh) // 2)
+    host := Gui("-Caption +ToolWindow +E0x08080000 -DPIScale")      ; NOACTIVATE | LAYERED
+    pt := Buffer(8), NumPut("int", gx, "int", gy, pt)
+    sz := Buffer(8), NumPut("int", w, "int", hh, sz)
+    blend := Buffer(4), NumPut("uchar", 0, "uchar", 0, "uchar", 255, "uchar", 1, blend)  ; AC_SRC_ALPHA
+    DllCall("UpdateLayeredWindow", "ptr", host.Hwnd, "ptr", 0, "ptr", pt, "ptr", sz, "ptr", hdc
+        , "int64*", 0, "uint", 0, "ptr", blend, "uint", 2)
     host.Show(Format("x{} y{} w{} h{} NoActivate", gx, gy, w, hh))
-    RoundRegion(host.Hwnd, w, hh)
-    for e in dots                              ; Form erst nach dem Anzeigen, sonst verworfen
-        RoundRegion(e[1].Hwnd, e[2], d)
+    DllCall("SelectObject", "ptr", hdc, "ptr", obm)
+    DllCall("DeleteObject", "ptr", hbm)
+    DllCall("DeleteDC", "ptr", hdc)
     return {gui: host, key: key}
 }
 
-; Fensterform: Rechteck w×hh mit vollständig runden Enden
-RoundRegion(hwnd, w, hh) {
-    rgn := DllCall("CreateRoundRectRgn", "int", 0, "int", 0, "int", w + 1, "int", hh + 1, "int", hh, "int", hh, "ptr")
-    if !DllCall("SetWindowRgn", "ptr", hwnd, "ptr", rgn, "int", 1)
-        DllCall("DeleteObject", "ptr", rgn)
+GdipInit() {
+    static token := 0
+    if token
+        return
+    DllCall("LoadLibrary", "str", "gdiplus", "ptr")
+    si := Buffer(24, 0)
+    NumPut("uint", 1, si)                                      ; GdiplusVersion
+    DllCall("gdiplus\GdiplusStartup", "ptr*", &token, "ptr", si, "ptr", 0)
+}
+
+; Gefüllte Pille (bzw. Kreis, wenn w <= h) mit Farbe argb
+GdipPill(gr, argb, x, y, w, h) {
+    br := 0, path := 0
+    DllCall("gdiplus\GdipCreateSolidFill", "uint", argb, "ptr*", &br)
+    if w <= h
+        DllCall("gdiplus\GdipFillEllipse", "ptr", gr, "ptr", br, "float", x, "float", y, "float", w, "float", h)
+    else {
+        DllCall("gdiplus\GdipCreatePath", "int", 0, "ptr*", &path)
+        DllCall("gdiplus\GdipAddPathArc", "ptr", path, "float", x, "float", y, "float", h, "float", h, "float", 90, "float", 180)
+        DllCall("gdiplus\GdipAddPathArc", "ptr", path, "float", x + w - h, "float", y, "float", h, "float", h, "float", 270, "float", 180)
+        DllCall("gdiplus\GdipClosePathFigure", "ptr", path)
+        DllCall("gdiplus\GdipFillPath", "ptr", gr, "ptr", br, "ptr", path)
+        DllCall("gdiplus\GdipDeletePath", "ptr", path)
+    }
+    DllCall("gdiplus\GdipDeleteBrush", "ptr", br)
+}
+
+; Text in Segoe UI (Größe px), senkrecht zentriert im Rechteck x/y/w/h. Ohne gr wird nur
+; gemessen. Gibt die Breite des Texts zurück.
+GdipText(gr, text, px, argb := 0, x := 0, y := 0, w := 0, h := 0) {
+    fam := 0, font := 0, fmt := 0, br := 0, tmpDC := 0, own := !gr
+    if own {                                                  ; Messen: Hilfs-Grafik
+        tmpDC := DllCall("CreateCompatibleDC", "ptr", 0, "ptr")
+        DllCall("gdiplus\GdipCreateFromHDC", "ptr", tmpDC, "ptr*", &gr)
+    }
+    DllCall("gdiplus\GdipSetTextRenderingHint", "ptr", gr, "int", 4)  ; AntiAlias (für Transparenz)
+    DllCall("gdiplus\GdipCreateFontFamilyFromName", "wstr", "Segoe UI", "ptr", 0, "ptr*", &fam)
+    DllCall("gdiplus\GdipCreateFont", "ptr", fam, "float", px, "int", 0, "int", 2, "ptr*", &font)  ; Pixel
+    DllCall("gdiplus\GdipCreateStringFormat", "int", 0x1000, "int", 0, "ptr*", &fmt)               ; NoWrap
+    DllCall("gdiplus\GdipSetStringFormatLineAlign", "ptr", fmt, "int", 1)                          ; Mitte
+    rect := Buffer(16)
+    NumPut("float", x, "float", y, "float", w || 1000, "float", h || 100, rect)
+    if own {
+        bound := Buffer(16, 0)
+        DllCall("gdiplus\GdipMeasureString", "ptr", gr, "wstr", text, "int", -1, "ptr", font, "ptr", rect
+            , "ptr", fmt, "ptr", bound, "ptr", 0, "ptr", 0)
+        width := Ceil(NumGet(bound, 8, "float"))
+        DllCall("gdiplus\GdipDeleteGraphics", "ptr", gr)
+        DllCall("DeleteDC", "ptr", tmpDC)
+    } else {
+        DllCall("gdiplus\GdipCreateSolidFill", "uint", argb, "ptr*", &br)
+        DllCall("gdiplus\GdipDrawString", "ptr", gr, "wstr", text, "int", -1, "ptr", font, "ptr", rect, "ptr", fmt, "ptr", br)
+        DllCall("gdiplus\GdipDeleteBrush", "ptr", br)
+        width := w
+    }
+    DllCall("gdiplus\GdipDeleteStringFormat", "ptr", fmt)
+    DllCall("gdiplus\GdipDeleteFont", "ptr", font)
+    DllCall("gdiplus\GdipDeleteFontFamily", "ptr", fam)
+    return width
 }
 
 IndicatorClear() {
@@ -1720,9 +1797,9 @@ HandleEvent(ev, h) {
 }
 
 OnFocus(h) {
-    ; Anderswo geklickt: Übersicht schließen. Nicht direkt nach dem Öffnen, da kommt noch
-    ; der Fokuswechsel vom Schließen des Startmenüs (zweites Tippen auf Windows).
-    if OV.active && A_TickCount - OV.opened > 500
+    ; Anderswo geklickt: Übersicht schließen (nicht durch einen verspäteten Fokuswechsel
+    ; direkt nach dem Öffnen)
+    if OV.active && A_TickCount - OV.opened > 300
         OverviewClose()
     if A_TickCount < G.focusGrace       ; automatischer Fokuswechsel nach dem Schließen
         return
@@ -1937,20 +2014,24 @@ SetBorderColor(h, c) {
 }
 
 ;=============================== Übersicht ===================================
-; Doppelt auf die Windows-Taste tippen: alle Workspaces untereinander als verkleinerte
-; Streifen mit Live-Vorschauen (wie bei niri). Pfeiltasten/Tab wählen, Enter oder Klick
-; springt hin, Esc oder erneutes Doppeltippen schließt. Auch per Klick auf die
-; Workspace-Anzeige oben links.
+; Wie bei GNOME: Einmal auf die Windows-Taste tippen zeigt alle Workspaces untereinander
+; als verkleinerte Streifen mit Live-Vorschauen. Pfeiltasten/Tab wählen, Enter oder Klick
+; springt hin, Esc oder erneutes Tippen schließt. Wer stattdessen Text tippt, landet mit
+; diesem Text in der Windows-Suche. Das Startmenü öffnet sich beim Tippen auf Windows
+; deshalb nicht mehr (weiterhin über Strg+Esc oder die Taskleiste).
+; Auch per Klick auf die Workspace-Anzeige oben links.
 OverviewPress(*) {
-    if OV.down || G.paused
+    if OV.down || G.paused || !OVERVIEW_ON_TAP
         return                                 ; Tastenwiederholung beim Halten ignorieren
     OV.down := A_TickCount, OV.clean := true
-    ; Jede andere Taste, solange Windows gedrückt ist (Windows+X-Kombination), zählt nicht
-    ; als Tippen. A_PriorKey taugt dafür nicht: Ohne Tastenwiederholung steht dort die
-    ; Taste vor der Windows-Taste.
+    ; Dummy-Taste bei gedrückter Windows-Taste: Windows sieht eine Kombination und öffnet
+    ; beim Loslassen kein Startmenü. Windows+X-Kürzel funktionieren weiter.
+    Send("{Blind}{vkE8}")
+    ; Jede andere Taste, solange Windows gedrückt ist, zählt nicht als Tippen. A_PriorKey
+    ; taugt dafür nicht: Ohne Tastenwiederholung steht dort die Taste vor der Windows-Taste.
     ih := InputHook("V L0")
     ih.KeyOpt("{All}", "N")
-    ih.OnKeyDown := (hook, vk, sc) => (vk != 0x5B && vk != 0x5C) ? OV.clean := false : 0
+    ih.OnKeyDown := (hook, vk, sc) => (vk != 0x5B && vk != 0x5C && vk != 0xE8) ? OV.clean := false : 0
     ih.Start()
     OV.ih := ih
 }
@@ -1958,20 +2039,12 @@ OverviewPress(*) {
 OverviewRelease(*) {
     if !OV.down
         return
-    clean := OV.clean, held := A_TickCount - OV.down
+    clean := OV.clean
     OV.down := 0
     if OV.ih
         OV.ih.Stop(), OV.ih := 0
-    if !clean || held > 400 || OVERVIEW_DOUBLE_TAP <= 0 || G.paused || NAV.active {
-        OV.lastTap := 0
-        return
-    }
-    if OV.lastTap && A_TickCount - OV.lastTap <= OVERVIEW_DOUBLE_TAP {
-        OV.lastTap := 0
-        ; Das erste Tippen hat das Startmenü geöffnet, das zweite schließt es wieder
-        SetTimer(OverviewToggle, -60)
-    } else
-        OV.lastTap := A_TickCount
+    if clean && !G.paused && !NAV.active
+        SetTimer(OverviewToggle, -1)
 }
 
 OverviewToggle(mi := 0) {
@@ -1994,6 +2067,35 @@ OverviewHotkey(hk) {
     Critical "On"
     if OV.active
         OverviewKey(hk)
+}
+
+; Text in der Übersicht: Übersicht schließen, Windows-Suche öffnen und den Text dort
+; eintippen. Bis die Suche da ist, sammelt der InputHook weitere Zeichen.
+OverviewChar(hook, ch) {
+    if !OV.searching {
+        if Ord(ch) < 32                        ; Steuerzeichen (Enter, Tab, Esc) erledigen die Hotkeys
+            return
+        OV.searching := A_TickCount, OV.buf := ch
+        OverviewClose(true)
+        Send("#s")
+        SetTimer(SearchFlush, 50)
+        return
+    }
+    OV.buf .= ch
+}
+
+SearchFlush() {
+    found := WinActive("ahk_exe SearchHost.exe")
+    if !found && A_TickCount - OV.searching < 3000
+        return                                 ; Suche noch nicht offen
+    SetTimer(SearchFlush, 0)
+    if OV.kh
+        OV.kh.Stop(), OV.kh := 0
+    buf := OV.buf, OV.buf := "", OV.searching := 0
+    if found                                   ; nie in ein anderes Fenster tippen
+        SendText(buf)
+    else
+        Log("Windows-Suche ging nicht auf, Eingabe verworfen")
 }
 
 ; mi: Monitor, auf dem die Übersicht erscheint (0 = aktueller)
@@ -2040,6 +2142,12 @@ OverviewOpen(mi := 0) {
         OV.frame.Push(host.Add("Text", "x0 y0 w0 h0 Background" (HIGHLIGHT_COLOR != "" ? HIGHLIGHT_COLOR : AccentColor())))
     OV.active := true, OV.gui := host, OV.thumbs := thumbs, OV.items := items, OV.mon := mi
     OV.opened := A_TickCount
+    ; Text abfangen (nicht an die App weitergeben) → Windows-Suche. Pfeile, Enter, Tab und
+    ; Esc sind Hotkeys und haben Vorrang.
+    kh := InputHook("L0")
+    kh.OnChar := OverviewChar
+    kh.Start()
+    OV.kh := kh
     OverviewSelect(sel || 1)
     HideHighlight()
     host.Show(Format("x{} y{} w{} h{} NoActivate", m.ml, m.mt, mw, mh))
@@ -2129,7 +2237,10 @@ OverviewApply(i) {
     AfterChange()
 }
 
-OverviewClose() {
+; keepKeys: Texteingabe weiter abfangen (Übergang zur Windows-Suche)
+OverviewClose(keepKeys := false) {
+    if !keepKeys && OV.kh
+        OV.kh.Stop(), OV.kh := 0
     if !OV.active
         return
     OV.active := false

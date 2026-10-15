@@ -87,7 +87,7 @@ Jeder Monitor zeigt einen Workspace. Wie bei GNOME entstehen und verschwinden Wo
 
 | Taste | Wirkung |
 | --- | --- |
-| Windows zweimal kurz tippen | Übersicht: alle Workspaces untereinander mit Live-Vorschauen der Fenster. Pfeiltasten oder Tab wählen ein Fenster oder einen leeren Workspace, Enter oder ein Klick springt hin, Esc oder erneutes Doppeltippen schließt. Das erste Tippen öffnet kurz das Startmenü, das zweite schließt es wieder. |
+| Windows tippen | Übersicht wie bei GNOME: alle Workspaces untereinander mit Live-Vorschauen der Fenster. Pfeiltasten oder Tab wählen ein Fenster oder einen leeren Workspace, Enter oder ein Klick springt hin, Esc oder erneutes Tippen schließt. Wer stattdessen Text tippt, landet mit diesem Text in der Windows-Suche. Das Startmenü öffnet sich dafür nicht mehr beim Tippen auf Windows, sondern über Strg+Esc oder das Windows-Symbol in der Taskleiste. |
 | Windows+Bild↓ / Windows+Bild↑ | Nächster / vorheriger Workspace |
 | Windows+Strg+Bild↓ / Windows+Strg+Bild↑ | Aktives Fenster in den nächsten / vorherigen Workspace mitnehmen |
 | Windows+^ | Zum zuletzt benutzten Workspace. Windows-Taste gedrückt halten und ^ mehrmals drücken blättert weiter. |
@@ -130,7 +130,7 @@ Alle Einstellungen stehen am Anfang von `PaperWM.ahk`. Nach einer Änderung im T
 | `RESIZE_STEP`, `DRIFT_STEP`, `MIN_COL_WIDTH` | Schrittweite für Windows++/- und Windows+Ö/Ä, schmalste Spalte |
 | `WIDTH_STEPS`, `HEIGHT_STEPS` | Stufen für Windows+R bzw. Windows+Shift+R |
 | `ANIM_MS` | Dauer der Animationen in ms, `0` = aus (Standard 180) |
-| `OVERVIEW_DOUBLE_TAP` | Höchstabstand zwischen zwei Tipps auf Windows für die Übersicht, in ms, `0` = aus (Standard 400) |
+| `OVERVIEW_ON_TAP` | Tippen auf Windows öffnet die Übersicht statt des Startmenüs (Standard `true`) |
 | `SHOW_INDICATOR` | Workspace-Anzeige oben links an / aus |
 | `HIGHLIGHT`, `HIGHLIGHT_COLOR`, `HIGHLIGHT_WIDTH` | Rahmen um das aktive Fenster: an/aus, Farbe (leer = Windows-Akzentfarbe, sonst z. B. `"4A90E2"`), Stärke |
 | `HIGHLIGHT_DWM` | Zusätzlich den Windows-11-Fensterrand des aktiven Fensters einfärben |
@@ -140,7 +140,7 @@ Alle Einstellungen stehen am Anfang von `PaperWM.ahk`. Nach einer Änderung im T
 
 ## Wie es funktioniert und wo die Grenzen sind
 
-- **Überschriebene Windows-Kürzel:** Solange PaperWM läuft, belegt es Windows+R (Ausführen), Windows+N, Windows+I, Windows+C, Windows+T, Windows+. (Emoji), Windows+Tab und Alt+Tab. Windows+V (Zwischenablage) bleibt frei. Zum vorübergehenden Benutzen im Tray-Menü pausieren.
+- **Überschriebene Windows-Kürzel:** Solange PaperWM läuft, belegt es das Tippen auf Windows (Startmenü, siehe Übersicht), Windows+R (Ausführen), Windows+N, Windows+I, Windows+C, Windows+T, Windows+. (Emoji), Windows+Tab und Alt+Tab. Windows+V (Zwischenablage) bleibt frei. Zum vorübergehenden Benutzen im Tray-Menü pausieren.
 - **Gehaltene Tasten:** Windows+T und mehrmaliges Windows+^ oder Windows+Tab wirken nur, solange die Windows-Taste gedrückt bleibt.
 - **Versteckte Fenster:** Fenster außerhalb des sichtbaren Bereichs und auf versteckten Workspaces werden unsichtbar geschaltet („cloaking“, derselbe Mechanismus wie bei den virtuellen Desktops von Windows). Sie bleiben dabei auf ihrem Monitor und in ihrer Größe, in Taskleiste und Alt+Tab. Fehlt dieser Mechanismus, werden sie ersatzweise rechts außerhalb aller Monitore geparkt.
 - **Fenster am Rand zum Nachbarmonitor:** Unter Windows liegen alle Monitore auf einer gemeinsamen Fläche. Ein Fenster, das über die Kante ragt, erschiene also auf dem Nachbarmonitor. Deshalb ist das echte Fenster dort unsichtbar, und an seiner Stelle zeigt PaperWM eine Live-Vorschau in voller Größe, genau an der Monitorgrenze abgeschnitten. Nichts wird gestaucht, nichts ragt hinüber. Ein Klick auf die Vorschau holt das Fenster in den Blick. Am äußeren Rand ohne Nachbarmonitor ragt das echte Fenster einfach aus dem Bild. Die Erkennung richtet sich nach der tatsächlichen Monitoranordnung und funktioniert mit beliebig vielen Monitoren in jeder Größe.
