@@ -1,25 +1,27 @@
-# PaperWM für Windows
+# PaperWM for Windows
 
-Scrollendes Tiling nach dem Vorbild von [PaperWM](https://github.com/paperwm/PaperWM) für GNOME, als AutoHotkey-v2-Skript. Fenster liegen als Spalten auf einem endlosen, waagerechten Streifen, der Bildschirm zeigt einen Ausschnitt davon. Jeder Monitor zeigt einen eigenen Workspace. Die Tastenkürzel entsprechen den PaperWM-Standards.
+**English** | [Deutsch](README.de.md)
 
-Im Folgenden steht **Windows** für die Windows-Taste. Die Tasten `^`, `Ö` und `Ä` beziehen sich auf das deutsche QWERTZ-Layout.
+Scrollable tiling in the style of [PaperWM](https://github.com/paperwm/PaperWM) for GNOME, as an AutoHotkey v2 script. Windows are arranged as columns on an endless horizontal strip, and the screen shows a section of it. Each monitor shows its own workspace. The shortcuts follow the PaperWM defaults.
 
-## Installation und Start
+Below, **Windows** means the Windows key. The keys `^`, `Ö` and `Ä` refer to the German QWERTZ layout. On other layouts they are the keys in the same position: `^` is the key left of `1`, `Ö` and `Ä` are the two keys right of `L`.
 
-1. [AutoHotkey v2](https://www.autohotkey.com/) installieren, z. B. mit `winget install AutoHotkey.AutoHotkey`.
-2. Dieses Repo klonen oder als ZIP herunterladen.
-3. `PaperWM.ahk` doppelklicken. Läuft es schon, wird es neu gestartet.
+## Installation and start
 
-Ob PaperWM läuft, erkennst du am grünen „H“ von AutoHotkey im Infobereich der Taskleiste (unten rechts, ggf. hinter dem Pfeil).
+1. Install [AutoHotkey v2](https://www.autohotkey.com/), for example with `winget install AutoHotkey.AutoHotkey`.
+2. Clone this repo or download it as a ZIP.
+3. Double-click `PaperWM.ahk`. If it is already running, it restarts.
 
-**Autostart einrichten:**
+You can tell PaperWM is running by AutoHotkey's green "H" in the notification area of the taskbar (bottom right, possibly behind the arrow).
 
-Über die Aufgabenplanung startet PaperWM sofort bei der Anmeldung. Eine Verknüpfung im Autostart-Ordner (`shell:startup`) funktioniert auch, Windows startet solche Einträge nach dem Hochfahren aber absichtlich erst spät. Die Aufgabe läuft außerdem mit Admin-Rechten, so dass PaperWM auch Admin-Fenster wie den Task-Manager kacheln kann.
+**Start automatically with Windows:**
 
-PowerShell **als Administrator** öffnen, in den Ordner von PaperWM wechseln und ausführen:
+A scheduled task starts PaperWM right at sign-in. A shortcut in the startup folder (`shell:startup`) also works, but Windows deliberately runs those entries late after boot. The task also runs with admin rights, so PaperWM can tile admin windows such as Task Manager too.
+
+Open PowerShell **as administrator**, change to the PaperWM folder and run:
 
 ```powershell
-$ahk = "$env:LOCALAPPDATA\Programs\AutoHotkey\v2\AutoHotkey64.exe"   # ggf. Pfad anpassen
+$ahk = "$env:LOCALAPPDATA\Programs\AutoHotkey\v2\AutoHotkey64.exe"   # adjust the path if needed
 $a = New-ScheduledTaskAction -Execute $ahk -Argument "`"$PWD\PaperWM.ahk`"" -WorkingDirectory $PWD
 $t = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $s = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit 0 -Priority 4
@@ -27,127 +29,130 @@ $p = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -Ru
 Register-ScheduledTask PaperWM -Action $a -Trigger $t -Settings $s -Principal $p -Force
 ```
 
-Zum Abschalten: `Unregister-ScheduledTask PaperWM` (ebenfalls als Administrator).
+To turn it off: `Unregister-ScheduledTask PaperWM` (also as administrator).
 
-| Datei | Zweck |
+| File | Purpose |
 | --- | --- |
-| `PaperWM.ahk` | Das Skript selbst |
-| `rescue.ahk` | Notfall: macht nach einem Absturz versteckte Fenster wieder sichtbar |
-| `PaperWM.layout` | Gespeicherte Aufteilung der Workspaces, wird beim ersten Start angelegt |
-| `PaperWM.log` | Fehlerprotokoll und Startzeit |
+| `PaperWM.ahk` | The script itself |
+| `rescue.ahk` | Emergency: makes hidden windows visible again after a crash |
+| `PaperWM.layout` | Saved workspace layout, created on first start |
+| `PaperWM.log` | Error log and start time |
 
-## Ausschalten
+## Turning it off
 
-Ausgeschaltet wird über einen Rechtsklick auf das grüne „H“ im Infobereich der Taskleiste.
+Right-click the green "H" in the notification area of the taskbar.
 
-| Menüpunkt | Wirkung |
+| Menu item | Effect |
 | --- | --- |
-| Pausieren / Fortsetzen | Schaltet Kacheln und Tastenkürzel ab, Windows verhält sich wieder normal. Versteckte Fenster werden auf den linken Monitor geholt. Ein zweiter Klick schaltet PaperWM wieder ein und stellt die Aufteilung wieder her. |
-| Alle Fenster zurückholen | Holt alle versteckten Fenster sichtbar auf den linken Monitor. PaperWM läuft weiter. |
-| Neu laden | Startet das Skript neu, z. B. nach einer Änderung der Einstellungen. |
-| Beenden | Beendet PaperWM bis zum nächsten Start. Die Aufteilung wird vorher gespeichert, versteckte Fenster werden zurückgeholt. |
+| Pausieren / Fortsetzen (pause / resume) | Turns tiling and shortcuts off, Windows behaves normally again. Hidden windows are brought to the left monitor. A second click turns PaperWM back on and restores the layout. |
+| Alle Fenster zurückholen (bring back all windows) | Brings all hidden windows visibly to the left monitor. PaperWM keeps running. |
+| Neu laden (reload) | Restarts the script, for example after changing the settings. |
+| Beenden (exit) | Exits PaperWM until the next start. The layout is saved first, hidden windows are brought back. |
 
-- **Dauerhaft abschalten:** Beenden und zusätzlich den Autostart abschalten (siehe oben).
-- **Nach einem Absturz** sind Fenster eventuell noch unsichtbar geschaltet. Sie stehen dann zwar in der Taskleiste, erscheinen aber nicht. `rescue.ahk` doppelklicken: Es macht sie wieder sichtbar und holt Fenster außerhalb der Bildschirme zurück. Ein erneuter Start von PaperWM erledigt das ebenfalls.
+- **Turn it off permanently:** exit and also remove the autostart (see above).
+- **After a crash**, windows may still be switched invisible. They are listed in the taskbar but don't appear. Double-click `rescue.ahk`: it makes them visible again and brings back windows outside the screens. Starting PaperWM again does the same.
 
-## Tastenkürzel: Fenster
+## Shortcuts: windows
 
-| Taste | Wirkung |
+| Key | Effect |
 | --- | --- |
-| Windows+← / Windows+→ | Fokus auf die Spalte links / rechts |
-| Windows+↑ / Windows+↓ | Fokus auf das Fenster darüber / darunter in der Spalte |
-| Windows+. / Windows+, | Nächstes / vorheriges Fenster |
-| Windows+Pos1 / Windows+Ende | Erstes / letztes Fenster |
-| Windows+Strg+← / Windows+Strg+→ | Spalte nach links / rechts verschieben (auch Windows+Strg+, / . und Windows+Shift+, / .) |
-| Windows+Strg+↑ / Windows+Strg+↓ | Fenster in der Spalte nach oben / unten verschieben |
-| Windows+I | Fenster der rechten Spalte unten in die aktive Spalte holen |
-| Windows+O | Unterstes Fenster der Spalte als eigene Spalte rechts ausgliedern |
-| Windows+Shift+O | Aktives Fenster als eigene Spalte ausgliedern |
-| Windows+R / Windows+Alt+R | Breite durchschalten: 38 % → 50 % → 62 % (vorwärts / rückwärts) |
-| Windows+Shift+R / Windows+Alt+Shift+R | Höhe in der Spalte durchschalten |
-| Windows++ / Windows+- | Breite um 100 px größer / kleiner (auch Ziffernblock + / -) |
-| Windows+Shift++ / Windows+Shift+- | Höhe größer / kleiner |
-| Windows+F | Volle Breite an / aus |
-| Windows+Shift+F | Vollbild an / aus |
-| Windows+C | Aktives Fenster mittig zentrieren |
-| Windows+Shift+C | Fokusmodus umschalten: Standard / aktives Fenster immer zentriert |
-| Windows+Ö / Windows+Ä | Streifen ein Stück nach links / rechts schieben |
-| Windows+Shift+W | Wo neue Fenster erscheinen: rechts → links → Anfang → Ende → unten |
-| Windows+Enter / Windows+N | Neues Fenster des aktiven Programms |
-| Windows+Backspace | Aktives Fenster schließen |
-| Windows+Mausrad | Fokus links / rechts (Extra, nicht in PaperWM) |
+| Windows+← / Windows+→ | Focus the column to the left / right |
+| Windows+↑ / Windows+↓ | Focus the window above / below in the column |
+| Windows+. / Windows+, | Next / previous window |
+| Windows+Home / Windows+End | First / last window |
+| Windows+Ctrl+← / Windows+Ctrl+→ | Move the column left / right (also Windows+Ctrl+, / . and Windows+Shift+, / .) |
+| Windows+Ctrl+↑ / Windows+Ctrl+↓ | Move the window up / down in the column |
+| Windows+I | Pull the window of the right column into the bottom of the active column |
+| Windows+O | Split the bottom window of the column off into its own column to the right |
+| Windows+Shift+O | Split the active window off into its own column |
+| Windows+R / Windows+Alt+R | Cycle the width: 38 % → 50 % → 62 % (forward / backward) |
+| Windows+Shift+R / Windows+Alt+Shift+R | Cycle the height within the column |
+| Windows++ / Windows+- | Width 100 px larger / smaller (also numpad + / -) |
+| Windows+Shift++ / Windows+Shift+- | Height larger / smaller |
+| Windows+F | Full width on / off |
+| Windows+Shift+F | Fullscreen on / off |
+| Windows+C | Center the active window |
+| Windows+Shift+C | Toggle focus mode: default / active window always centered |
+| Windows+Ö / Windows+Ä | Nudge the strip left / right |
+| Windows+Shift+W | Where new windows appear: right → left → start → end → below |
+| Windows+Enter / Windows+N | New window of the active program |
+| Windows+Backspace | Close the active window |
+| Windows+mouse wheel | Focus left / right (extra, not in PaperWM) |
 
-## Tastenkürzel: Workspaces und Monitore
+## Shortcuts: workspaces and monitors
 
-Es gibt vier Workspaces, jeder Monitor zeigt einen davon. Beim Mitnehmen bleibt das aktive Fenster sichtbar, während der Workspace drumherum wechselt.
+There are four workspaces, and each monitor shows one of them. When you take a window along, it stays visible while the workspace around it changes.
 
-| Taste | Wirkung |
+| Key | Effect |
 | --- | --- |
-| Windows+Bild↓ / Windows+Bild↑ | Nächster / vorheriger Workspace |
-| Windows+Strg+Bild↓ / Windows+Strg+Bild↑ | Aktives Fenster in den nächsten / vorherigen Workspace mitnehmen |
-| Windows+^ | Zum zuletzt benutzten Workspace. Windows-Taste gedrückt halten und ^ mehrmals drücken blättert weiter. |
-| Windows+Shift+^ | Dasselbe rückwärts |
-| Windows+Strg+^ / Windows+Strg+Shift+^ | Dasselbe, das aktive Fenster wandert mit |
-| Windows+T | Fenster aufnehmen. Dann mit gedrückter Windows-Taste zum Ziel wechseln, beim Loslassen wird es dort abgelegt. |
-| Windows+Shift+← / → / ↑ / ↓ | Fokus auf den Monitor in dieser Richtung |
-| Windows+Shift+Strg+← / → / ↑ / ↓ | Aktives Fenster auf den Monitor in dieser Richtung schieben |
-| Windows+Alt+← / → / ↑ / ↓ | Workspaces mit dem Monitor in dieser Richtung tauschen |
-| Strg+Alt+Shift+← / → / ↑ / ↓ | Aktiven Workspace auf den Monitor in dieser Richtung schieben |
+| Hold Windows | Overview: all workspaces stacked, with live previews of the windows. While still holding Windows, the arrow keys select a window; releasing jumps to it. A click selects immediately, Windows+Esc cancels. A short tap still opens the Start menu. |
+| Windows+Page↓ / Windows+Page↑ | Next / previous workspace |
+| Windows+Ctrl+Page↓ / Windows+Ctrl+Page↑ | Take the active window to the next / previous workspace |
+| Windows+^ | Go to the most recently used workspace. Holding Windows and pressing ^ repeatedly goes further back. |
+| Windows+Shift+^ | The same, backwards |
+| Windows+Ctrl+^ / Windows+Ctrl+Shift+^ | The same, taking the active window along |
+| Windows+T | Pick up the window. Then switch to the target while holding Windows; releasing drops it there. |
+| Windows+Shift+← / → / ↑ / ↓ | Focus the monitor in that direction |
+| Windows+Shift+Ctrl+← / → / ↑ / ↓ | Move the active window to the monitor in that direction |
+| Windows+Alt+← / → / ↑ / ↓ | Swap workspaces with the monitor in that direction |
+| Ctrl+Alt+Shift+← / → / ↑ / ↓ | Move the active workspace to the monitor in that direction |
 
-## Tastenkürzel: Scratch-Layer, Alt-Tab und Maus
+## Shortcuts: scratch layer, Alt-Tab and mouse
 
-Der Scratch-Layer hält schwebende Fenster außerhalb des Streifens, etwa einen Rechner oder Notizen.
+The scratch layer keeps floating windows outside the strip, such as a calculator or notes.
 
-| Taste | Wirkung |
+| Key | Effect |
 | --- | --- |
-| Windows+Strg+Esc | Aktives Fenster zwischen Streifen und Scratch-Layer verschieben |
-| Windows+Esc | Zuletzt benutztes Scratch-Fenster ein- / ausblenden |
-| Windows+Shift+Esc | Ganzen Scratch-Layer ein- / ausblenden |
-| Windows+Tab / Alt+Tab | Durch die zuletzt benutzten Fenster blättern (Windows bzw. Alt gedrückt halten) |
-| Windows+Shift+Tab / Alt+Shift+Tab | Dasselbe rückwärts |
-| Strg+Alt+Tab / Strg+Alt+Shift+Tab | Durch die Scratch-Fenster blättern |
+| Windows+Ctrl+Esc | Move the active window between the strip and the scratch layer |
+| Windows+Esc | Show / hide the most recently used scratch window |
+| Windows+Shift+Esc | Show / hide the whole scratch layer |
+| Windows+Tab / Alt+Tab | Cycle through recently used windows (hold Windows or Alt) |
+| Windows+Shift+Tab / Alt+Shift+Tab | The same, backwards |
+| Ctrl+Alt+Tab / Ctrl+Alt+Shift+Tab | Cycle through the scratch windows |
 
-**Mit der Maus:**
+**With the mouse:**
 
-- Fensterrand ziehen: Die neue Breite wird übernommen.
-- Fenster auf eine andere Spalte ziehen: Die Spalten werden umsortiert.
-- Fenster auf den anderen Monitor ziehen: Es wandert in dessen Workspace.
-- Klick auf ein Taskleisten-Symbol: Holt das Fenster in den Blick, auch von einem anderen Workspace.
+- Drag a window edge: the new width is kept.
+- Drag a window onto another column: the columns are reordered.
+- Drag a window to the other monitor: it moves into that monitor's workspace.
+- Click a taskbar icon: brings the window into view, even from another workspace.
+- Click the preview of a cut-off window at the monitor edge: brings the window into view.
 
-## Einstellungen
+## Settings
 
-Alle Einstellungen stehen am Anfang von `PaperWM.ahk`. Nach einer Änderung im Tray-Menü „Neu laden“ wählen.
+All settings are at the top of `PaperWM.ahk`. After a change, choose "Neu laden" (reload) in the tray menu.
 
-| Einstellung | Bedeutung |
+| Setting | Meaning |
 | --- | --- |
-| `WINDOW_GAP`, `H_MARGIN`, `V_MARGIN`, `V_MARGIN_BOTTOM` | Abstand zwischen den Fenstern und zum Bildschirmrand (Standard 20 px). Alle px-Angaben gelten für 100 % Skalierung und werden pro Monitor umgerechnet. |
-| `RESIZE_STEP`, `DRIFT_STEP`, `MIN_COL_WIDTH` | Schrittweite für Windows++/- und Windows+Ö/Ä, schmalste Spalte |
-| `WIDTH_STEPS`, `HEIGHT_STEPS` | Stufen für Windows+R bzw. Windows+Shift+R |
-| `NUM_WORKSPACES` | Anzahl der Workspaces (mindestens so viele wie Monitore) |
-| `ANIM_MS` | Dauer der Animationen in ms, `0` = aus (Standard 180) |
-| `HIGHLIGHT`, `HIGHLIGHT_COLOR`, `HIGHLIGHT_WIDTH` | Rahmen um das aktive Fenster: an/aus, Farbe (leer = Windows-Akzentfarbe, sonst z. B. `"4A90E2"`), Stärke |
-| `HIGHLIGHT_DWM` | Zusätzlich den Windows-11-Fensterrand des aktiven Fensters einfärben |
-| `FLOAT_EXES`, `FLOAT_CLASSES` | Programme bzw. Fensterklassen, die schweben statt gekachelt zu werden |
-| `IGNORE_EXES`, `IGNORE_CLASSES` | Programme bzw. Fensterklassen, die PaperWM ganz ignoriert |
-| `KEYMAP` | Alle Tastenkürzel |
+| `WINDOW_GAP`, `H_MARGIN`, `V_MARGIN`, `V_MARGIN_BOTTOM` | Gap between windows and to the screen edge (default 20 px). All px values are for 100 % scaling and are converted per monitor. |
+| `RESIZE_STEP`, `DRIFT_STEP`, `MIN_COL_WIDTH` | Step size for Windows++/- and Windows+Ö/Ä, narrowest column |
+| `WIDTH_STEPS`, `HEIGHT_STEPS` | Steps for Windows+R and Windows+Shift+R |
+| `NUM_WORKSPACES` | Number of workspaces (at least as many as monitors) |
+| `ANIM_MS` | Animation duration in ms, `0` = off (default 180) |
+| `OVERVIEW_DELAY` | How long Windows must be held on its own before the overview appears, in ms, `0` = off (default 400) |
+| `HIGHLIGHT`, `HIGHLIGHT_COLOR`, `HIGHLIGHT_WIDTH` | Frame around the active window: on/off, color (empty = Windows accent color, otherwise e.g. `"4A90E2"`), thickness |
+| `HIGHLIGHT_DWM` | Also color the Windows 11 border of the active window |
+| `FLOAT_EXES`, `FLOAT_CLASSES` | Programs or window classes that float instead of being tiled |
+| `IGNORE_EXES`, `IGNORE_CLASSES` | Programs or window classes that PaperWM ignores entirely |
+| `KEYMAP` | All shortcuts |
 
-## Wie es funktioniert und wo die Grenzen sind
+## How it works and where the limits are
 
-- **Überschriebene Windows-Kürzel:** Solange PaperWM läuft, belegt es Windows+R (Ausführen), Windows+N, Windows+I, Windows+C, Windows+T, Windows+. (Emoji), Windows+Tab und Alt+Tab. Windows+V (Zwischenablage) bleibt frei. Zum vorübergehenden Benutzen im Tray-Menü pausieren.
-- **Gehaltene Tasten:** Windows+T und mehrmaliges Windows+^ oder Windows+Tab wirken nur, solange die Windows-Taste gedrückt bleibt.
-- **Versteckte Fenster:** Fenster außerhalb des sichtbaren Bereichs und auf versteckten Workspaces werden unsichtbar geschaltet („cloaking“, derselbe Mechanismus wie bei den virtuellen Desktops von Windows). Sie bleiben dabei auf ihrem Monitor und in ihrer Größe, in Taskleiste und Alt+Tab. Fehlt dieser Mechanismus, werden sie ersatzweise rechts außerhalb aller Monitore geparkt.
-- **Fenster am Rand zum Nachbarmonitor:** Unter Windows liegen alle Monitore auf einer gemeinsamen Fläche. Ein Fenster, das über die Kante ragt, erschiene also auf dem Nachbarmonitor. Deshalb ist das echte Fenster dort unsichtbar, und an seiner Stelle zeigt PaperWM eine Live-Vorschau in voller Größe, genau an der Monitorgrenze abgeschnitten. Nichts wird gestaucht, nichts ragt hinüber. Ein Klick auf die Vorschau holt das Fenster in den Blick. Am äußeren Rand ohne Nachbarmonitor ragt das echte Fenster einfach aus dem Bild. Die Erkennung richtet sich nach der tatsächlichen Monitoranordnung und funktioniert mit beliebig vielen Monitoren in jeder Größe.
-  - Chrome, Edge, VS Code, Teams und andere Chromium/Electron-Apps zeichnen nicht, solange sie unsichtbar sind. Ihre Vorschau am Rand zeigt deshalb das letzte Bild, bis sie hereingescrollt werden.
-  - Der farbige Rahmen um das aktive Fenster wird an der Monitorgrenze abgeschnitten.
-- **Unterschiedliche Monitore:** Abstände und Schrittweiten werden mit der Skalierung des jeweiligen Monitors umgerechnet, Spaltenbreiten als Anteil der Monitorbreite gespeichert. Zieht ein Workspace auf einen größeren oder kleineren Monitor um, bleiben die Proportionen gleich.
-- **Hervorhebung:** Um das aktive Fenster liegt ein Rahmen in der Windows-Akzentfarbe, wie bei PaperWM im Abstand zwischen den Fenstern.
-- **Gespeicherte Aufteilung:** Workspaces, Spalten, Breiten, Höhen, die Zuordnung von Monitor zu Workspace und die Einstellungen landen in `PaperWM.layout`. Gespeichert wird kurz nach jeder Änderung, jede Minute und beim Beenden.
-  - Nach einem Neustart von PaperWM werden Fenster über ihr Handle wiedererkannt, das klappt zuverlässig.
-  - Nach einem Neustart von Windows werden sie über Programm und Fenstertitel erkannt, ersatzweise über Programm und Fensterklasse. Das ist nur so gut, wie die Titel gleich bleiben.
-  - Minimierte Fenster, auch nach Windows+D, behalten ihren Platz und kommen beim Wiederherstellen genau dorthin zurück.
-- **Animation:** Beim Scrollen und bei neuen Fenstern gleiten die Fenster an ihren Platz. Ändert sich die Größe eines Fensters, passiert das einmal am Anfang, danach wird nur verschoben, damit die Apps nicht ständig neu zeichnen müssen. Fenster, die unterwegs die Grenze zum Nachbarmonitor kreuzen, gleiten als abgeschnittene Live-Vorschau. Workspace-Wechsel gleiten senkrecht: Mit Windows+Bild↓ kommt der neue Workspace von unten, mit Windows+Bild↑ von oben. Liegt ein Monitor über oder unter dem aktuellen, wird nicht animiert.
-- **Admin-Fenster** (z. B. der Task-Manager) werden ignoriert, solange das Skript nicht selbst als Admin läuft (beim Autostart über die Aufgabenplanung tut es das).
-- **Fenster, die nicht kacheln:** Fenster mit fester Größe, Dialoge und Topmost-Fenster werden nicht gekachelt.
-- **Virtuelle Desktops von Windows** besser nicht gleichzeitig benutzen. Die Workspaces ersetzen sie.
-- **Snap:** Unter Einstellungen → System → Multitasking kann „Fenster andocken“ ausgeschaltet werden, damit Windows-Snap beim Ziehen nicht dazwischenfunkt.
-- **Fehler** landen in `PaperWM.log`, ohne dass ein Dialog das Skript blockiert. Bei jedem Start steht dort, wie viele Sekunden nach dem Hochfahren PaperWM gestartet ist und wie lange die Einrichtung gedauert hat. Mit dem Startparameter `/debug` stehen dort zusätzlich die Zeiten jeder Aktion.
+- **Overridden Windows shortcuts:** while PaperWM runs, it takes over Windows+R (Run), Windows+N, Windows+I, Windows+C, Windows+T, Windows+. (emoji), Windows+Tab and Alt+Tab. Windows+V (clipboard) stays free. To use them temporarily, pause PaperWM from the tray menu.
+- **Held keys:** Windows+T, repeated Windows+^ or Windows+Tab, and the overview only work while the Windows key stays pressed.
+- **Hidden windows:** windows outside the visible area and on hidden workspaces are switched invisible ("cloaking", the same mechanism Windows uses for its virtual desktops). They stay on their monitor, keep their size, and remain in the taskbar and Alt+Tab. If this mechanism is unavailable, they are parked to the right outside all monitors instead.
+- **Windows at the edge to a neighboring monitor:** on Windows, all monitors share one coordinate space, so a window that crosses the edge would show up on the neighboring monitor. That's why the real window is invisible there, and PaperWM shows a full-size live preview in its place, cut off exactly at the monitor boundary. Nothing is squeezed, nothing spills over. Clicking the preview brings the window into view. At an outer edge with no neighboring monitor, the real window simply extends off-screen. The detection follows the actual monitor arrangement and works with any number of monitors of any size.
+  - Chrome, Edge, VS Code, Teams and other Chromium/Electron apps don't draw while they are invisible. Their edge preview therefore shows the last frame until they are scrolled into view.
+  - The colored frame around the active window is cut off at the monitor boundary.
+- **Different monitors:** gaps and step sizes are converted using each monitor's scaling, and column widths are stored as a fraction of the monitor width. When a workspace moves to a larger or smaller monitor, the proportions stay the same.
+- **Highlight:** a frame in the Windows accent color surrounds the active window, in the gap between windows as in PaperWM.
+- **Saved layout:** workspaces, columns, widths, heights, the monitor-to-workspace assignment and the settings are stored in `PaperWM.layout`. It is saved shortly after every change, every minute and on exit.
+  - After restarting PaperWM, windows are recognized by their handle, which is reliable.
+  - After restarting Windows, they are recognized by program and window title, falling back to program and window class. This is only as good as the titles stay the same.
+  - Minimized windows, also after Windows+D, keep their place and return exactly there when restored.
+- **Animation:** when scrolling and for new windows, windows glide into place. If a window's size changes, that happens once at the start; after that it is only moved, so apps don't have to redraw constantly. Windows that cross the boundary to a neighboring monitor on the way glide as a cut-off live preview. Workspace switches glide vertically: with Windows+Page↓ the new workspace comes from below, with Windows+Page↑ from above. If there is a monitor above or below the current one, there is no animation.
+- **Admin windows** (such as Task Manager) are ignored unless the script itself runs as admin (it does when started via the scheduled task).
+- **Windows that don't tile:** fixed-size windows, dialogs and topmost windows are not tiled.
+- **Windows virtual desktops:** better not used at the same time. The workspaces replace them.
+- **Snap:** under Settings → System → Multitasking you can turn off "Snap windows" so Windows Snap doesn't interfere when dragging.
+- **Errors** go to `PaperWM.log` without a dialog blocking the script. On every start, the log records how many seconds after boot PaperWM started and how long setup took. With the start parameter `/debug`, it also records the time of every action.

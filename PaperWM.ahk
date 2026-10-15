@@ -34,6 +34,7 @@ global MIN_COL_WIDTH   := 200     ; schmalste Spalte in px
 global NUM_WORKSPACES  := 4       ; mindestens so viele wie Monitore
 global ANIM_MS         := 180     ; Dauer der Scroll-Animation in ms (0 = aus)
 global WARP_MOUSE      := true    ; Maus beim Monitorwechsel mitnehmen
+global OVERVIEW_DELAY  := 400     ; ms Windows-Taste allein halten bis zur Übersicht (0 = aus)
 global SHOW_OSD        := true    ; Workspace-Anzeige einblenden
 
 ; Hervorhebung des aktiven Fensters
@@ -153,6 +154,7 @@ global G := {active: 0, scratch: [], q: [], openPos: "right", focusCenter: false
     , self: DllCall("GetCurrentProcessId")}
 global NAV := {active: false, kind: "", list: [], idx: 1, mon: 0, hwnd: 0}
 global HL := {gui: 0, key: "", region: "", dwm: 0, cref: 0}
+global OV := {active: false, armed: false, gui: 0, thumbs: [], items: [], sel: 0, mon: 1, frame: []}
 
 global ACTIONS := Map(
     "switch-next", () => SwitchLinear(1),
@@ -229,6 +231,9 @@ CloakInit()
 Init()
 for km in KEYMAP
     Hotkey(km[1], MakeHandler(ACTIONS[km[2]]))
+InstallKeybdHook()                     ; für A_PriorKey (Windows-Taste allein gehalten?)
+for k in ["LWin", "RWin"]
+    Hotkey("~" k, OverviewPress), Hotkey("~" k " Up", OverviewRelease)
 
 cb := CallbackCreate(WinEventProc, "F", 7)
 for r in [[0x0003, 0x0003], [0x000A, 0x000B], [0x0016, 0x0017], [0x8001, 0x8003], [0x800C, 0x800C], [0x8017, 0x8018]]
@@ -237,6 +242,7 @@ for r in [[0x0003, 0x0003], [0x000A, 0x000B], [0x0016, 0x0017], [0x8001, 0x8003]
 
 OnMessage(0x7E, (*) => SetTimer(OnDisplayChange, -1000))   ; WM_DISPLAYCHANGE
 OnMessage(0x5555, (*) => SetTimer(DumpState, -1))          ; Debug: Zustand in PaperWM.state.txt schreiben
+OnMessage(0x5556, DebugOverview)                            ; Debug: Übersicht ohne Halten öffnen/Taste senden
 OnMessage(0x21, PeekMouseActivate)                          ; WM_MOUSEACTIVATE: Vorschau nicht aktivieren
 OnMessage(0x201, PeekClick)                                 ; WM_LBUTTONDOWN auf einer Vorschau
 SetTimer(Sanity, 2000)
@@ -782,7 +788,7 @@ UsableW(m) => m.r - m.l - 2 * Px(H_MARGIN, m)
 ColWidth(col, m) => col.full ? m.r - m.l : Clamp(Round(col.width * UsableW(m)), Px(MIN_COL_WIDTH, m), UsableW(m))
 
 ; Pixelbreite → Anteil an der nutzbaren Breite von Monitor m
-WidthFrac(px, m) => Clamp(px, Px(MIN_COL_WIDTH, m), UsableW(m)) / UsableW(m)
+WidthFrac(w, m) => Clamp(w, Px(MIN_COL_WIDTH, m), UsableW(m)) / UsableW(m)
 
 ; Anteil einer Stufe aus WIDTH_STEPS, so dass zwei Spalten mit Abstand genau aufgehen
 StepWidth(s, m) => (s * (UsableW(m) + Px(WINDOW_GAP, m)) - Px(WINDOW_GAP, m)) / UsableW(m)
@@ -812,36 +818,47 @@ EnsureVisible(sp, center := false) {
         sp.scrollX := x + w + hm - vw
 }
 
-ComputePlans(sp) {
-    m := MONS[sp.mon], plans := [], x := 0, gap := Px(WINDOW_GAP, m)
-    stripL := m.l - sp.scrollX                    ; Bildschirm-x des Streifenanfangs
+; Rechtecke aller Fenster eines Workspaces auf Monitor m: x relativ zum Streifenanfang,
+; y relativ zur Monitoroberkante. width = Gesamtbreite des Streifens.
+StripRects(sp, m) {
+    rects := [], x := 0, gap := Px(WINDOW_GAP, m)
     for ci, col in sp.cols {
         w := ColWidth(col, m)
         if col.full
-            top := m.mt, colH := m.mb - m.mt
+            top := 0, colH := m.mb - m.mt
         else
-            top := m.t + Px(V_MARGIN, m), colH := m.b - m.t - Px(V_MARGIN, m) - Px(V_MARGIN_BOTTOM, m)
-        sx := stripL + x
+            top := m.t - m.mt + Px(V_MARGIN, m), colH := m.b - m.t - Px(V_MARGIN, m) - Px(V_MARGIN_BOTTOM, m)
         n := col.wins.Length, avail := colH - gap * (n - 1), y := top
         for ri, h in col.wins {
             hh := ri = n ? top + colH - y : Round(avail * col.fracs[ri])
-            ; Fenster behalten immer ihre volle Größe. peek: ragt in einen Nachbarmonitor →
-            ; echtes Fenster unsichtbar, stattdessen eine am Monitorrand abgeschnittene
-            ; Live-Vorschau. Am äußeren Rand des Desktops hängt das echte Fenster einfach
-            ; über den Bildschirmrand hinaus.
-            p := {hwnd: h, x: sx, y: y, w: w, h: hh, sx: sx, show: true, peek: false}
-            if sx >= m.r || sx + w <= m.l
-                p.show := false
-            else if HitsOtherMon(sx, y, w, hh, sp.mon) {
-                if G.canCloak
-                    p.peek := true
-                else
-                    p.show := false
-            }
-            plans.Push(p)
+            rects.Push({hwnd: h, ci: ci, x: x, y: y, w: w, h: hh})
             y += hh + gap
         }
         x += w + gap
+    }
+    rects.width := Max(0, x - gap)
+    return rects
+}
+
+ComputePlans(sp) {
+    m := MONS[sp.mon], plans := []
+    stripL := m.l - sp.scrollX                    ; Bildschirm-x des Streifenanfangs
+    for r in StripRects(sp, m) {
+        sx := stripL + r.x, y := m.mt + r.y, w := r.w, hh := r.h
+        ; Fenster behalten immer ihre volle Größe. peek: ragt in einen Nachbarmonitor →
+        ; echtes Fenster unsichtbar, stattdessen eine am Monitorrand abgeschnittene
+        ; Live-Vorschau. Am äußeren Rand des Desktops hängt das echte Fenster einfach
+        ; über den Bildschirmrand hinaus.
+        p := {hwnd: r.hwnd, x: sx, y: y, w: w, h: hh, sx: sx, show: true, peek: false}
+        if sx >= m.r || sx + w <= m.l
+            p.show := false
+        else if HitsOtherMon(sx, y, w, hh, sp.mon) {
+            if G.canCloak
+                p.peek := true
+            else
+                p.show := false
+        }
+        plans.Push(p)
     }
     return plans
 }
@@ -1214,19 +1231,26 @@ PeekShow(h, x, y, w, hh, m) {
     if pk.key = key
         return true
     pk.key := key
-    ; DWM_THUMBNAIL_PROPERTIES: Ziel = ganzes Vorschaufenster, Quelle = sichtbarer Ausschnitt
-    ; (relativ zum sichtbaren Fensterrahmen), deckend, sichtbar, mit Titelleiste
-    props := Buffer(48, 0)
-    NumPut("uint", 0x1F, props, 0)
-    NumPut("int", 0, "int", 0, "int", vr - vl, "int", vb - vt, props, 4)
-    NumPut("int", vl - x, "int", vt - y, "int", vr - x, "int", vb - y, props, 20)
-    NumPut("uchar", 255, props, 36)
-    NumPut("int", 1, "int", 0, props, 40)
-    DllCall("dwmapi\DwmUpdateThumbnailProperties", "ptr", pk.thumb, "ptr", props)
+    ; Ziel = ganzes Vorschaufenster, Quelle = sichtbarer Ausschnitt (relativ zum Fensterrahmen)
+    DllCall("dwmapi\DwmUpdateThumbnailProperties", "ptr", pk.thumb
+        , "ptr", ThumbProps([0, 0, vr - vl, vb - vt], [vl - x, vt - y, vr - x, vb - y]))
     ; direkt hinter das (unsichtbare) Quellfenster einsortieren | NOACTIVATE | SHOWWINDOW
     DllCall("SetWindowPos", "ptr", pk.gui.Hwnd, "ptr", h, "int", vl, "int", vt
         , "int", vr - vl, "int", vb - vt, "uint", 0x50)
     return true
+}
+
+; DWM_THUMBNAIL_PROPERTIES: Ziel- und optional Quellrechteck [l, t, r, b], deckend, sichtbar,
+; mit Titelleiste. Ohne Quelle wird das ganze Fenster ins Ziel skaliert.
+ThumbProps(dest, src := 0) {
+    props := Buffer(48, 0)
+    NumPut("uint", src ? 0x1F : 0x1D, props, 0)
+    NumPut("int", dest[1], "int", dest[2], "int", dest[3], "int", dest[4], props, 4)
+    if src
+        NumPut("int", src[1], "int", src[2], "int", src[3], "int", src[4], props, 20)
+    NumPut("uchar", 255, props, 36)
+    NumPut("int", 1, "int", 0, props, 40)
+    return props
 }
 
 PeekHide(h) {
@@ -1249,12 +1273,16 @@ PeekDestroy(h) {
 PeekHwnd(h) => (pk := G.peeks.Get(h, 0)) && pk.key != "" ? pk.gui.Hwnd : 0
 
 PeekMouseActivate(wParam, lParam, msg, hwnd) {
-    if G.peekSrc.Has(hwnd)
+    if G.peekSrc.Has(hwnd) || (OV.gui && hwnd = OV.gui.Hwnd)
         return 3                                        ; MA_NOACTIVATE
 }
 
 ; Klick auf eine Vorschau holt das Fenster in den Blick
 PeekClick(wParam, lParam, msg, hwnd) {
+    if OV.gui && hwnd = OV.gui.Hwnd {
+        OverviewClick(lParam << 48 >> 48, lParam << 32 >> 48)
+        return 0
+    }
     if !G.peekSrc.Has(hwnd)
         return
     h := G.peekSrc[hwnd]
@@ -1784,6 +1812,195 @@ SetBorderColor(h, c) {
     DllCall("dwmapi\DwmSetWindowAttribute", "ptr", h, "uint", 34, "ptr", buf, "uint", 4)
 }
 
+;=============================== Übersicht ===================================
+; Windows-Taste allein lange halten: alle Workspaces untereinander als verkleinerte
+; Streifen mit Live-Vorschauen (wie bei niri). Solange Windows gedrückt bleibt, wählen die
+; Pfeiltasten ein Fenster, Loslassen springt hin. Ein Klick wählt sofort, Esc bricht ab.
+OverviewPress(*) {
+    if OV.armed || OV.active || OVERVIEW_DELAY <= 0 || G.paused
+        return                                 ; Tastenwiederholung beim Halten ignorieren
+    OV.armed := true
+    SetTimer(OverviewHoldCheck, -OVERVIEW_DELAY)
+}
+
+OverviewRelease(*) {
+    OV.armed := false
+    SetTimer(OverviewHoldCheck, 0)
+}
+
+OverviewHoldCheck() {
+    OV.armed := false
+    if DEBUG
+        Log(Format("Übersicht? prior={} LWin={} RWin={} nav={}", A_PriorKey
+            , GetKeyState("LWin", "P"), GetKeyState("RWin", "P"), NAV.active))
+    if G.paused || NAV.active || OV.active || !InList(A_PriorKey, ["LWin", "RWin"])
+        return                                 ; inzwischen eine Windows+X-Kombination
+    if !GetKeyState("LWin", "P") && !GetKeyState("RWin", "P")
+        return
+    Send("{Blind}{vkE8}")                      ; sonst geht beim Loslassen das Startmenü auf
+    Critical "On"
+    try OverviewOpen()
+    catch Error as e {
+        Log("Übersicht: " e.Message " (Zeile " e.Line ")")
+        OverviewClose()
+    }
+}
+
+; watch: beim Loslassen der Windows-Taste zur Auswahl springen
+OverviewOpen(watch := true) {
+    mi := CurMonIdx(), m := MONS[mi], sc := m.scale
+    mw := m.mr - m.ml, mh := m.mb - m.mt
+    pad := Round(32 * sc), labH := Round(28 * sc), rowGap := Round(16 * sc)
+    host := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08000000 -DPIScale")
+    host.BackColor := "161616"
+    host.SetFont("s11 cC8C8C8", "Segoe UI")
+    n := SPACES.Length, rowH := (mh - 2 * pad - (n - 1) * rowGap) / n
+    fg := DllCall("GetForegroundWindow", "ptr"), items := [], thumbs := [], sel := 0
+    for row, sp in SPACES {
+        top := Round(pad + (row - 1) * (rowH + rowGap))
+        sm := SpaceMon(sp), rects := StripRects(sp, sm)
+        label := "Workspace " sp.idx (rects.Length ? "" : "  (leer)")
+        host.Add("Text", Format("x{} y{} w{} h{} BackgroundTrans{}", pad, top, mw - 2 * pad, labH
+            , sp = G.active ? " cFFFFFF" : ""), label)
+        y0 := top + labH, availH := rowH - labH, availW := mw - 2 * pad
+        s := Min(availH / (sm.mb - sm.mt), rects.width ? availW / rects.width : 1)
+        if !rects.Length {                     ; leerer Workspace: Platzhalter zum Auswählen
+            w := Round((sm.mr - sm.ml) * s), hh := Round(availH)
+            host.Add("Text", Format("x{} y{} w{} h{} Background242424", pad, y0, w, hh))
+            items.Push({h: 0, sp: sp, row: row, x: pad, y: y0, w: w, hh: hh})
+            if sp = G.active && !sel
+                sel := items.Length
+            continue
+        }
+        for r in rects {
+            x := pad + Round(r.x * s), y := y0 + Round(r.y * s), w := Round(r.w * s), hh := Round(r.h * s)
+            thumb := 0
+            if DllCall("dwmapi\DwmRegisterThumbnail", "ptr", host.Hwnd, "ptr", r.hwnd, "ptr*", &thumb) = 0 {
+                DllCall("dwmapi\DwmUpdateThumbnailProperties", "ptr", thumb, "ptr", ThumbProps([x, y, x + w, y + hh]))
+                thumbs.Push(thumb)
+            }
+            items.Push({h: r.hwnd, sp: sp, row: row, x: x, y: y, w: w, hh: hh})
+            if r.hwnd = fg
+                sel := items.Length
+        }
+    }
+    ; Auswahlrahmen aus vier Balken: Vorschauen liegen immer über den Controls
+    OV.frame := []
+    loop 4
+        OV.frame.Push(host.Add("Text", "x0 y0 w0 h0 Background" (HIGHLIGHT_COLOR != "" ? HIGHLIGHT_COLOR : AccentColor())))
+    OV.active := true, OV.gui := host, OV.thumbs := thumbs, OV.items := items, OV.mon := mi
+    OverviewSelect(sel || 1)
+    HideHighlight()
+    host.Show(Format("x{} y{} w{} h{} NoActivate", m.ml, m.mt, mw, mh))
+    if watch
+        SetTimer(OverviewCheck, 30)
+}
+
+OverviewSelect(i) {
+    OV.sel := i
+    it := OV.items[i], sc := MONS[OV.mon].scale
+    t := Max(2, Round(3 * sc)), d := Max(1, Round(2 * sc))          ; Stärke, Abstand
+    l := it.x - d - t, tp := it.y - d - t, fw := it.w + 2 * (d + t), fh := it.hh + 2 * (d + t)
+    OV.frame[1].Move(l, tp, fw, t)
+    OV.frame[2].Move(l, tp + fh - t, fw, t)
+    OV.frame[3].Move(l, tp, t, fh)
+    OV.frame[4].Move(l + fw - t, tp, t, fh)
+    for c in OV.frame
+        c.Redraw()
+}
+
+; Pfeiltasten bei gehaltener Windows-Taste
+OverviewKey(hk) {
+    switch hk {
+        case "#Left": OverviewMove(-1, 0)
+        case "#Right": OverviewMove(1, 0)
+        case "#Up": OverviewMove(0, -1)
+        case "#Down": OverviewMove(0, 1)
+        case "#Escape": OverviewClose()
+    }
+}
+
+; dx: vorheriges/nächstes Element derselben Zeile, dy: Zeile wechseln (nächstgelegenes Element)
+OverviewMove(dx, dy) {
+    cur := OV.items[OV.sel]
+    if dx {
+        j := OV.sel + dx
+        if j >= 1 && j <= OV.items.Length && OV.items[j].row = cur.row
+            OverviewSelect(j)
+        return
+    }
+    row := cur.row + dy, best := 0, bestD := 0, cx := cur.x + cur.w / 2
+    for i, it in OV.items {
+        dist := Abs(it.x + it.w / 2 - cx)
+        if it.row = row && (!best || dist < bestD)
+            best := i, bestD := dist
+    }
+    if best
+        OverviewSelect(best)
+}
+
+; Nur mit /debug: wParam 0 = öffnen, 1–4 = Pfeil links/rechts/oben/unten, 5 = Auswahl anwenden
+DebugOverview(wParam, *) {
+    if !DEBUG
+        return
+    SetTimer(() => (Critical("On")
+        , !wParam ? OverviewOpen(false) : wParam = 5 ? OverviewApply(OV.sel)
+        : OV.active ? OverviewKey(["#Left", "#Right", "#Up", "#Down"][wParam]) : 0), -1)
+    return 0
+}
+
+; Windows losgelassen: zur Auswahl springen
+OverviewCheck() {
+    if GetKeyState("LWin", "P") || GetKeyState("RWin", "P")
+        return
+    Critical "On"
+    SetTimer(OverviewCheck, 0)
+    if OV.active
+        OverviewApply(OV.sel)
+}
+
+OverviewClick(x, y) {
+    for i, it in OV.items
+        if x >= it.x && x < it.x + it.w && y >= it.y && y < it.y + it.hh {
+            SetTimer(OverviewApply.Bind(i), -1)
+            return
+        }
+}
+
+OverviewApply(i) {
+    Critical "On"
+    if !OV.active || i > OV.items.Length
+        return
+    it := OV.items[i], mi := OV.mon
+    OverviewClose()
+    try {
+        if it.h
+            RevealWindow(it.h)
+        else {
+            cur := MONS[mi].space
+            ShowSpace(it.sp, mi, cur && cur != it.sp ? WsDir(cur, it.sp) : 0)
+            FocusSpace(it.sp)
+            Osd("Workspace " it.sp.idx, mi)
+        }
+    } catch Error as e
+        Log("Übersicht: " e.Message " (Zeile " e.Line ")")
+    UpdateHighlight()
+    MarkDirty()
+}
+
+OverviewClose() {
+    SetTimer(OverviewCheck, 0)
+    if !OV.active
+        return
+    OV.active := false
+    for th in OV.thumbs
+        DllCall("dwmapi\DwmUnregisterThumbnail", "ptr", th)
+    OV.thumbs := [], OV.frame := []
+    try OV.gui.Destroy()
+    OV.gui := 0
+    UpdateHighlight()
+}
+
 ;=========================== Navigation (Super halten) =======================
 StartNav(kind) {
     NAV.active := true, NAV.kind := kind
@@ -1829,6 +2046,10 @@ RunAction(fn) {
     Critical "On"
     if G.paused
         return
+    if OV.active {                         ; Übersicht offen: Pfeile wählen, Esc bricht ab
+        OverviewKey(A_ThisHotkey)
+        return
+    }
     t0 := QPC()
     try {
         fn()
@@ -2346,6 +2567,7 @@ TogglePause(*) {
         return
     }
     SaveLayout()
+    OverviewClose()
     G.paused := true
     Suspend(true)
     HideHighlight()
@@ -2358,6 +2580,7 @@ Cleanup(*) {
         DllCall("UnhookWinEvent", "ptr", hk)
     if !G.paused
         SaveLayout()
+    OverviewClose()
     HideHighlight()
     RescueAll()
 }
