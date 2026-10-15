@@ -154,7 +154,7 @@ global G := {active: 0, scratch: [], q: [], openPos: "right", focusCenter: false
     , self: DllCall("GetCurrentProcessId")}
 global NAV := {active: false, kind: "", list: [], idx: 1, mon: 0, hwnd: 0}
 global HL := {gui: 0, key: "", region: "", dwm: 0, cref: 0}
-global OV := {active: false, armed: false, gui: 0, thumbs: [], items: [], sel: 0, mon: 1, frame: []}
+global OV := {active: false, armed: false, clean: false, ih: 0, gui: 0, thumbs: [], items: [], sel: 0, mon: 1, frame: []}
 
 global ACTIONS := Map(
     "switch-next", () => SwitchLinear(1),
@@ -1819,21 +1819,35 @@ SetBorderColor(h, c) {
 OverviewPress(*) {
     if OV.armed || OV.active || OVERVIEW_DELAY <= 0 || G.paused
         return                                 ; Tastenwiederholung beim Halten ignorieren
-    OV.armed := true
+    OV.armed := true, OV.clean := true
+    ; Jede andere Taste während des Haltens (Windows+X-Kombination) verhindert die Übersicht.
+    ; A_PriorKey taugt dafür nicht: Ohne Tastenwiederholung steht dort die Taste davor.
+    ih := InputHook("V L0")
+    ih.KeyOpt("{All}", "N")
+    ih.OnKeyDown := (hook, vk, sc) => (vk != 0x5B && vk != 0x5C) ? OV.clean := false : 0
+    ih.Start()
+    OV.ih := ih
     SetTimer(OverviewHoldCheck, -OVERVIEW_DELAY)
 }
 
 OverviewRelease(*) {
-    OV.armed := false
+    OverviewDisarm()
     SetTimer(OverviewHoldCheck, 0)
 }
 
-OverviewHoldCheck() {
+OverviewDisarm() {
     OV.armed := false
+    if OV.ih
+        OV.ih.Stop(), OV.ih := 0
+}
+
+OverviewHoldCheck() {
+    clean := OV.clean
+    OverviewDisarm()
     if DEBUG
-        Log(Format("Übersicht? prior={} LWin={} RWin={} nav={}", A_PriorKey
+        Log(Format("Übersicht? sauber={} LWin={} RWin={} nav={}", clean
             , GetKeyState("LWin", "P"), GetKeyState("RWin", "P"), NAV.active))
-    if G.paused || NAV.active || OV.active || !InList(A_PriorKey, ["LWin", "RWin"])
+    if G.paused || NAV.active || OV.active || !clean
         return                                 ; inzwischen eine Windows+X-Kombination
     if !GetKeyState("LWin", "P") && !GetKeyState("RWin", "P")
         return
@@ -2044,6 +2058,7 @@ MakeHandler(fn) => (*) => RunAction(fn)
 
 RunAction(fn) {
     Critical "On"
+    OV.clean := false                      ; Windows+Kürzel: keine Übersicht beim Halten
     if G.paused
         return
     if OV.active {                         ; Übersicht offen: Pfeile wählen, Esc bricht ab
@@ -2567,6 +2582,7 @@ TogglePause(*) {
         return
     }
     SaveLayout()
+    OverviewRelease()
     OverviewClose()
     G.paused := true
     Suspend(true)
