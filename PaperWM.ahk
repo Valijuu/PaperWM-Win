@@ -154,7 +154,8 @@ global G := {active: 0, scratch: [], q: [], openPos: "right", focusCenter: false
     , self: DllCall("GetCurrentProcessId")}
 global NAV := {active: false, kind: "", list: [], idx: 1, mon: 0, hwnd: 0}
 global HL := {gui: 0, key: "", region: "", dwm: 0, cref: 0}
-global OV := {active: false, opened: 0, down: 0, clean: false, ih: 0, kh: 0, searching: 0, buf: "", gui: 0, thumbs: [], items: [], sel: 0, mon: 1, frame: []}
+global OV := {active: false, opened: 0, down: 0, clean: false, ih: 0, kh: 0, searching: 0, buf: ""
+    , ctrls: [], rows: [], scroll: 0, scrollAnim: 0, pad: 0, viewH: 0, contentH: 0, gui: 0, thumbs: [], items: [], sel: 0, mon: 1, frame: []}
 global IND := Map()        ; Monitor → Workspace-Anzeige {gui, key}
 
 global ACTIONS := Map(
@@ -235,7 +236,7 @@ for km in KEYMAP
 for k in ["LWin", "RWin"]                 ; Tippen auf Windows: Übersicht
     Hotkey("~" k, OverviewPress), Hotkey("~" k " Up", OverviewRelease)
 HotIf(OverviewIsOpen)                     ; Tasten, solange die Übersicht offen ist
-for k in ["Left", "Right", "Up", "Down", "Tab", "+Tab", "Enter", "NumpadEnter", "Escape"]
+for k in ["Left", "Right", "Up", "Down", "Tab", "+Tab", "Enter", "NumpadEnter", "Escape", "WheelUp", "WheelDown"]
     Hotkey(k, OverviewHotkey)
 HotIf()
 
@@ -1915,13 +1916,28 @@ Sanity() {
 InitHighlight() {
     if !HIGHLIGHT
         return
-    rgb := HIGHLIGHT_COLOR != "" ? HIGHLIGHT_COLOR : AccentColor()
+    ; Eine zu dunkle Akzentfarbe wäre auf dunklem Hintergrund kaum zu sehen → aufhellen
+    rgb := HIGHLIGHT_COLOR != "" ? HIGHLIGHT_COLOR : Brighten(AccentColor(), 0.6)
     v := Integer("0x" rgb)
     HL.cref := ((v & 0xFF) << 16) | (v & 0xFF00) | ((v >> 16) & 0xFF)     ; RRGGBB → COLORREF
     ; Werkzeugfenster, nicht aktivierbar, klickdurchlässig
     HL.gui := Gui("+ToolWindow -Caption +E0x08000020 -DPIScale")
     HL.gui.BackColor := rgb
     WinSetTransparent(255, HL.gui)
+}
+
+; Rahmenfarbe für die Übersicht (dunkler Hintergrund): Akzentfarbe, notfalls aufgehellt
+OverviewColor() => Brighten(HIGHLIGHT_COLOR != "" ? HIGHLIGHT_COLOR : AccentColor(), 0.6)
+
+
+; Mischt die Farbe RRGGBB so weit mit Weiß, dass ihre Helligkeit mindestens minL (0–1) ist
+Brighten(rgb, minL) {
+    v := Integer("0x" rgb), rr := (v >> 16) & 0xFF, gg := (v >> 8) & 0xFF, bb := v & 0xFF
+    lum := (0.299 * rr + 0.587 * gg + 0.114 * bb) / 255
+    if lum >= minL
+        return rgb
+    f := (minL - lum) / (1 - lum)                ; Anteil Weiß
+    return Format("{:02X}{:02X}{:02X}", Round(rr + (255 - rr) * f), Round(gg + (255 - gg) * f), Round(bb + (255 - bb) * f))
 }
 
 AccentColor() {
@@ -2099,6 +2115,9 @@ SearchFlush() {
 }
 
 ; mi: Monitor, auf dem die Übersicht erscheint (0 = aktueller)
+; Wie bei niri: Belegte Workspaces bekommen eine große, feste Zeilenhöhe (etwa zwei passen
+; auf den Bildschirm), leere nur eine schmale. Passt nicht alles, scrollt die Übersicht
+; mit der Auswahl mit. Alle Positionen sind Inhaltskoordinaten, OV.scroll verschiebt sie.
 OverviewOpen(mi := 0) {
     mi := mi || CurMonIdx(), m := MONS[mi], sc := m.scale
     mw := m.mr - m.ml, mh := m.mb - m.mt
@@ -2106,23 +2125,27 @@ OverviewOpen(mi := 0) {
     host := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08000000 -DPIScale")
     host.BackColor := "161616"
     host.SetFont("s11 cC8C8C8", "Segoe UI")
-    ; Leere Workspaces bekommen nur eine schmale Zeile, den Rest teilen sich die belegten
     weights := [], total := 0
     for sp in SPACES
         weights.Push(sp.cols.Length ? 1 : 0.3), total += weights[weights.Length]
     free := mh - 2 * pad - (SPACES.Length - 1) * rowGap
-    fg := DllCall("GetForegroundWindow", "ptr"), items := [], thumbs := [], sel := 0, top := pad
+    unit := Max(free / total, (mh - 2 * pad - rowGap) / 2.25)   ; Höhe einer belegten Zeile
+    fg := DllCall("GetForegroundWindow", "ptr"), items := [], thumbs := [], ctrls := [], rows := []
+    sel := 0, top := pad
     for row, sp in SPACES {
-        rowH := free * weights[row] / total
+        rowH := unit * weights[row]
+        rows.Push({top: Round(top), bottom: Round(top + rowH)})
         sm := SpaceMon(sp), rects := StripRects(sp, sm)
         label := "Workspace " sp.idx (rects.Length ? "" : "  (leer)")
-        host.Add("Text", Format("x{} y{} w{} h{} BackgroundTrans{}", pad, Round(top), mw - 2 * pad, labH
+        c := host.Add("Text", Format("x{} y{} w{} h{} BackgroundTrans{}", pad, Round(top), mw - 2 * pad, labH
             , sp = G.active ? " cFFFFFF" : ""), label)
+        ctrls.Push({c: c, x: pad, y: Round(top), w: mw - 2 * pad, h: labH})
         y0 := Round(top + labH), availH := rowH - labH, availW := mw - 2 * pad
         top += rowH + rowGap
         if !rects.Length {                     ; leerer Workspace: Platzhalter zum Auswählen
             hh := Round(availH), w := Round(hh * (sm.mr - sm.ml) / (sm.mb - sm.mt))
-            host.Add("Text", Format("x{} y{} w{} h{} Background242424", pad, y0, w, hh))
+            c := host.Add("Text", Format("x{} y{} w{} h{} Background242424", pad, y0, w, hh))
+            ctrls.Push({c: c, x: pad, y: y0, w: w, h: hh})
             items.Push({h: 0, sp: sp, row: row, x: pad, y: y0, w: w, hh: hh})
             if sp = G.active && !sel
                 sel := items.Length
@@ -2136,10 +2159,8 @@ OverviewOpen(mi := 0) {
         for r in rects {
             x := pad + Round(r.x * s), y := y0 + Round((r.y - yMin) * s), w := Round(r.w * s), hh := Round(r.h * s)
             thumb := 0
-            if DllCall("dwmapi\DwmRegisterThumbnail", "ptr", host.Hwnd, "ptr", r.hwnd, "ptr*", &thumb) = 0 {
-                DllCall("dwmapi\DwmUpdateThumbnailProperties", "ptr", thumb, "ptr", ThumbProps([x, y, x + w, y + hh]))
-                thumbs.Push(thumb)
-            }
+            if DllCall("dwmapi\DwmRegisterThumbnail", "ptr", host.Hwnd, "ptr", r.hwnd, "ptr*", &thumb) = 0
+                thumbs.Push({t: thumb, x: x, y: y, w: w, h: hh})
             items.Push({h: r.hwnd, sp: sp, row: row, x: x, y: y, w: w, hh: hh})
             if r.hwnd = fg
                 sel := items.Length
@@ -2148,25 +2169,72 @@ OverviewOpen(mi := 0) {
     ; Auswahlrahmen aus vier Balken: Vorschauen liegen immer über den Controls
     OV.frame := []
     loop 4
-        OV.frame.Push(host.Add("Text", "x0 y0 w0 h0 Background" (HIGHLIGHT_COLOR != "" ? HIGHLIGHT_COLOR : AccentColor())))
-    OV.active := true, OV.gui := host, OV.thumbs := thumbs, OV.items := items, OV.mon := mi
-    OV.opened := A_TickCount
+        OV.frame.Push(host.Add("Text", "x0 y0 w0 h0 Background" OverviewColor()))
+    OV.active := true, OV.gui := host, OV.thumbs := thumbs, OV.ctrls := ctrls, OV.items := items
+    OV.rows := rows, OV.mon := mi, OV.pad := pad, OV.viewH := mh
+    OV.contentH := Round(top - rowGap + pad), OV.scroll := 0, OV.opened := A_TickCount
     ; Text abfangen (nicht an die App weitergeben) → Windows-Suche. Pfeile, Enter, Tab und
     ; Esc sind Hotkeys und haben Vorrang.
     kh := InputHook("L0")
     kh.OnChar := OverviewChar
     kh.Start()
     OV.kh := kh
-    OverviewSelect(sel || 1)
+    OV.sel := sel || 1
+    OverviewPlace(0)                           ; Vorschauen erstmals platzieren
+    OverviewSelect(OV.sel, false)
     HideHighlight()
     host.Show(Format("x{} y{} w{} h{} NoActivate", m.ml, m.mt, mw, mh))
 }
 
-OverviewSelect(i) {
+; Auswahl setzen und die Zeile in den sichtbaren Bereich scrollen (animate: weich)
+OverviewSelect(i, animate := true) {
     OV.sel := i
-    it := OV.items[i], sc := MONS[OV.mon].scale
+    rw := OV.rows[OV.items[i].row], to := OV.scroll
+    if rw.top - OV.pad < to
+        to := rw.top - OV.pad
+    else if rw.bottom + OV.pad > to + OV.viewH
+        to := rw.bottom + OV.pad - OV.viewH
+    to := Clamp(to, 0, Max(0, OV.contentH - OV.viewH))
+    if to = OV.scroll {
+        OverviewFrame()
+        return
+    }
+    if !animate || ANIM_MS <= 0 {
+        OverviewPlace(to)
+        return
+    }
+    OV.scrollAnim := {from: OV.scroll, to: to, start: A_TickCount}
+    SetTimer(OverviewScrollTick, 10)
+    OverviewScrollTick()
+}
+
+OverviewScrollTick() {
+    if !OV.active || !OV.scrollAnim {
+        SetTimer(OverviewScrollTick, 0)
+        return
+    }
+    a := OV.scrollAnim, t := Min(1, (A_TickCount - a.start) / ANIM_MS)
+    OverviewPlace(Round(a.from + (a.to - a.from) * (1 - (1 - t) ** 3)))
+    if t >= 1
+        OV.scrollAnim := 0, SetTimer(OverviewScrollTick, 0)
+}
+
+; Alles um scroll nach oben verschoben anordnen
+OverviewPlace(scroll) {
+    OV.scroll := scroll
+    for e in OV.ctrls
+        e.c.Move(e.x, e.y - scroll, e.w, e.h)
+    for e in OV.thumbs
+        DllCall("dwmapi\DwmUpdateThumbnailProperties", "ptr", e.t
+            , "ptr", ThumbProps([e.x, e.y - scroll, e.x + e.w, e.y - scroll + e.h]))
+    OverviewFrame()
+}
+
+; Auswahlrahmen um das gewählte Element
+OverviewFrame() {
+    it := OV.items[OV.sel], sc := MONS[OV.mon].scale
     t := Max(2, Round(3 * sc)), d := Max(1, Round(2 * sc))          ; Stärke, Abstand
-    l := it.x - d - t, tp := it.y - d - t, fw := it.w + 2 * (d + t), fh := it.hh + 2 * (d + t)
+    l := it.x - d - t, tp := it.y - OV.scroll - d - t, fw := it.w + 2 * (d + t), fh := it.hh + 2 * (d + t)
     OV.frame[1].Move(l, tp, fw, t)
     OV.frame[2].Move(l, tp + fh - t, fw, t)
     OV.frame[3].Move(l, tp, t, fh)
@@ -2180,8 +2248,8 @@ OverviewKey(hk) {
     switch StrReplace(hk, "#") {
         case "Left": OverviewMove(-1, 0)
         case "Right": OverviewMove(1, 0)
-        case "Up": OverviewMove(0, -1)
-        case "Down": OverviewMove(0, 1)
+        case "Up", "WheelUp": OverviewMove(0, -1)
+        case "Down", "WheelDown": OverviewMove(0, 1)
         case "Tab": OverviewSelect(Mod(OV.sel, OV.items.Length) + 1)
         case "+Tab": OverviewSelect(Mod(OV.sel - 2 + OV.items.Length, OV.items.Length) + 1)
         case "Enter", "NumpadEnter": OverviewApply(OV.sel)
@@ -2219,6 +2287,7 @@ DebugOverview(wParam, *) {
 }
 
 OverviewClick(x, y) {
+    y += OV.scroll                             ; Bildschirm → Inhaltskoordinaten
     for i, it in OV.items
         if x >= it.x && x < it.x + it.w && y >= it.y && y < it.y + it.hh {
             SetTimer(OverviewApply.Bind(i), -1)
@@ -2252,10 +2321,11 @@ OverviewClose(keepKeys := false) {
         OV.kh.Stop(), OV.kh := 0
     if !OV.active
         return
-    OV.active := false
-    for th in OV.thumbs
-        DllCall("dwmapi\DwmUnregisterThumbnail", "ptr", th)
-    OV.thumbs := [], OV.frame := []
+    OV.active := false, OV.scrollAnim := 0
+    SetTimer(OverviewScrollTick, 0)
+    for e in OV.thumbs
+        DllCall("dwmapi\DwmUnregisterThumbnail", "ptr", e.t)
+    OV.thumbs := [], OV.ctrls := [], OV.frame := []
     try OV.gui.Destroy()
     OV.gui := 0
     UpdateHighlight()

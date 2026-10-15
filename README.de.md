@@ -87,7 +87,7 @@ Jeder Monitor zeigt einen Workspace. Wie bei GNOME entstehen und verschwinden Wo
 
 | Taste | Wirkung |
 | --- | --- |
-| Windows tippen | Übersicht wie bei GNOME: alle Workspaces untereinander mit Live-Vorschauen der Fenster. Pfeiltasten oder Tab wählen ein Fenster oder einen leeren Workspace, Enter oder ein Klick springt hin, Esc oder erneutes Tippen schließt. Wer stattdessen Text tippt, landet mit diesem Text in der Windows-Suche. Das Startmenü öffnet sich dafür nicht mehr beim Tippen auf Windows, sondern über Strg+Esc oder das Windows-Symbol in der Taskleiste. |
+| Windows tippen | Übersicht wie bei GNOME: alle Workspaces untereinander mit großen Live-Vorschauen der Fenster. Passen nicht alle auf den Bildschirm, scrollt sie wie bei niri mit der Auswahl mit. Pfeiltasten, Tab oder das Mausrad wählen ein Fenster oder einen leeren Workspace, Enter oder ein Klick springt hin, Esc oder erneutes Tippen schließt. Wer stattdessen Text tippt, landet mit diesem Text in der Windows-Suche. Das Startmenü öffnet sich dafür nicht mehr beim Tippen auf Windows, sondern über Strg+Esc oder das Windows-Symbol in der Taskleiste. |
 | Windows+Bild↓ / Windows+Bild↑ | Nächster / vorheriger Workspace |
 | Windows+Strg+Bild↓ / Windows+Strg+Bild↑ | Aktives Fenster in den nächsten / vorherigen Workspace mitnehmen |
 | Windows+^ | Zum zuletzt benutzten Workspace. Windows-Taste gedrückt halten und ^ mehrmals drücken blättert weiter. |
@@ -132,7 +132,7 @@ Alle Einstellungen stehen am Anfang von `PaperWM.ahk`. Nach einer Änderung im T
 | `ANIM_MS` | Dauer der Animationen in ms, `0` = aus (Standard 180) |
 | `OVERVIEW_ON_TAP` | Tippen auf Windows öffnet die Übersicht statt des Startmenüs (Standard `true`) |
 | `SHOW_INDICATOR` | Workspace-Anzeige oben links an / aus |
-| `HIGHLIGHT`, `HIGHLIGHT_COLOR`, `HIGHLIGHT_WIDTH` | Rahmen um das aktive Fenster: an/aus, Farbe (leer = Windows-Akzentfarbe, sonst z. B. `"4A90E2"`), Stärke |
+| `HIGHLIGHT`, `HIGHLIGHT_COLOR`, `HIGHLIGHT_WIDTH` | Rahmen um das aktive Fenster: an/aus, Farbe (leer = Windows-Akzentfarbe, eine zu dunkle wird aufgehellt, sonst z. B. `"4A90E2"`), Stärke |
 | `HIGHLIGHT_DWM` | Zusätzlich den Windows-11-Fensterrand des aktiven Fensters einfärben |
 | `FLOAT_EXES`, `FLOAT_CLASSES` | Programme bzw. Fensterklassen, die schweben statt gekachelt zu werden |
 | `IGNORE_EXES`, `IGNORE_CLASSES` | Programme bzw. Fensterklassen, die PaperWM ganz ignoriert |

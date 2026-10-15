@@ -87,7 +87,7 @@ Each monitor shows one workspace. As in GNOME, workspaces come and go on their o
 
 | Key | Effect |
 | --- | --- |
-| Tap Windows | Overview as in GNOME: all workspaces stacked, with live previews of the windows. Arrow keys or Tab select a window or an empty workspace, Enter or a click jumps there, Esc or another tap closes it. If you type text instead, you land in Windows search with that text. For this, tapping Windows no longer opens the Start menu; use Ctrl+Esc or the Windows icon in the taskbar instead. |
+| Tap Windows | Overview as in GNOME: all workspaces stacked, with large live previews of the windows. If they don't all fit on the screen, it scrolls along with the selection as in niri. Arrow keys, Tab or the mouse wheel select a window or an empty workspace, Enter or a click jumps there, Esc or another tap closes it. If you type text instead, you land in Windows search with that text. For this, tapping Windows no longer opens the Start menu; use Ctrl+Esc or the Windows icon in the taskbar instead. |
 | Windows+Page↓ / Windows+Page↑ | Next / previous workspace |
 | Windows+Ctrl+Page↓ / Windows+Ctrl+Page↑ | Take the active window to the next / previous workspace |
 | Windows+^ | Go to the most recently used workspace. Holding Windows and pressing ^ repeatedly goes further back. |
@@ -132,7 +132,7 @@ All settings are at the top of `PaperWM.ahk`. After a change, choose "Neu laden"
 | `ANIM_MS` | Animation duration in ms, `0` = off (default 180) |
 | `OVERVIEW_ON_TAP` | Tapping Windows opens the overview instead of the Start menu (default `true`) |
 | `SHOW_INDICATOR` | Workspace indicator at the top left on / off |
-| `HIGHLIGHT`, `HIGHLIGHT_COLOR`, `HIGHLIGHT_WIDTH` | Frame around the active window: on/off, color (empty = Windows accent color, otherwise e.g. `"4A90E2"`), thickness |
+| `HIGHLIGHT`, `HIGHLIGHT_COLOR`, `HIGHLIGHT_WIDTH` | Frame around the active window: on/off, color (empty = Windows accent color, brightened if it is too dark, otherwise e.g. `"4A90E2"`), thickness |
 | `HIGHLIGHT_DWM` | Also color the Windows 11 border of the active window |
 | `FLOAT_EXES`, `FLOAT_CLASSES` | Programs or window classes that float instead of being tiled |
 | `IGNORE_EXES`, `IGNORE_CLASSES` | Programs or window classes that PaperWM ignores entirely |
